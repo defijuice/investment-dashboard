@@ -1,0 +1,32 @@
+{
+  "name": "kvic-automation",
+  "version": "1.0.0",
+  "description": "KVIC 공지사항 첨부파일 다운로드 및 Google Drive 업로드 자동화",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node src/index.js --test",
+    "server": "node server/index.js",
+    "server:dev": "node --watch server/index.js",
+    "admin:dev": "cd admin && npm run dev",
+    "admin:build": "cd admin && npm run build",
+    "dev": "concurrently \"npm run server:dev\" \"npm run admin:dev\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "cli-table3": "^0.6.5",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "express": "^4.22.1",
+    "googleapis": "^144.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "puppeteer": "^23.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
