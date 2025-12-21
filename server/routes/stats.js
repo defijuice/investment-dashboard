@@ -43,6 +43,27 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     .sort((a, b) => new Date(b['처리일시']) - new Date(a['처리일시']))
     .slice(0, 5);
 
+  // 최근 출자사업 (연도 역순, 최근 10개)
+  const recentProjects = projects
+    .sort((a, b) => {
+      const yearDiff = (parseInt(b['연도']) || 0) - (parseInt(a['연도']) || 0);
+      if (yearDiff !== 0) return yearDiff;
+      return (b['차수'] || '').localeCompare(a['차수'] || '');
+    })
+    .slice(0, 10)
+    .map(p => {
+      const projectApps = applications.filter(a => a['출자사업ID'] === p['ID']);
+      return {
+        ...p,
+        stats: {
+          total: projectApps.length,
+          선정: projectApps.filter(a => a['상태'] === '선정').length,
+          탈락: projectApps.filter(a => a['상태'] === '탈락').length,
+          접수: projectApps.filter(a => a['상태'] === '접수').length
+        }
+      };
+    });
+
   res.json({
     summary: {
       totalOperators,
@@ -51,7 +72,8 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     },
     statusCounts,
     fileCounts,
-    recentFiles
+    recentFiles,
+    recentProjects
   });
 }));
 

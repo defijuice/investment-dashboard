@@ -9,9 +9,10 @@
     "test": "node src/index.js --test",
     "server": "node server/index.js",
     "server:dev": "node --watch server/index.js",
-    "admin:dev": "cd admin && npm run dev",
-    "admin:build": "cd admin && npm run build",
-    "dev": "concurrently \"npm run server:dev\" \"npm run admin:dev\""
+    "client:dev": "cd client && npm run dev",
+    "client:build": "cd client && npm run build",
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "build": "npm run client:build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

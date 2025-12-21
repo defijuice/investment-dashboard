@@ -64,6 +64,56 @@ router.get('/:id', asyncHandler(async (req, res) => {
   });
 }));
 
+// 출자사업 상세 조회 (운용사명 포함, 파일 정보 포함)
+router.get('/:id/detail', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const sheets = await getSheetsClient();
+
+  const project = await sheets.findById('출자사업', id);
+  if (!project) {
+    const error = new Error(`출자사업을 찾을 수 없습니다: ${id}`);
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+
+  // 해당 사업의 신청현황 조회
+  const [allApplications, operators, files] = await Promise.all([
+    sheets.getAllRows('신청현황'),
+    sheets.getAllOperators(),
+    sheets.getAllRows('파일')
+  ]);
+
+  const applications = allApplications.filter(app => app['출자사업ID'] === id);
+  const operatorMap = new Map(operators.map(op => [op['ID'], op]));
+  const fileMap = new Map(files.map(f => [f['ID'], f]));
+
+  // 운용사명 조인
+  const enrichedApplications = applications.map(app => ({
+    ...app,
+    운용사명: operatorMap.get(app['운용사ID'])?.['운용사명'] || app['운용사ID']
+  }));
+
+  // 연결된 파일 정보
+  const parseFileIds = (fileIdString) => {
+    if (!fileIdString) return [];
+    return fileIdString.split(',').map(id => id.trim()).filter(Boolean);
+  };
+
+  const supportFileIds = parseFileIds(project['지원파일ID']);
+  const resultFileIds = parseFileIds(project['결과파일ID']);
+
+  const linkedFiles = {
+    support: supportFileIds.map(fid => fileMap.get(fid)).filter(Boolean),
+    result: resultFileIds.map(fid => fileMap.get(fid)).filter(Boolean)
+  };
+
+  res.json({
+    data: project,
+    applications: enrichedApplications,
+    linkedFiles
+  });
+}));
+
 // 출자사업 생성
 router.post('/', asyncHandler(async (req, res) => {
   const { 사업명, 소관, 공고유형, 연도, 차수 } = req.body;

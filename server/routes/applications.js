@@ -236,4 +236,198 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   res.json({ success: true, id });
 }));
 
+// 고급 검색 (Advanced Filter)
+router.get('/search/advanced', asyncHandler(async (req, res) => {
+  const {
+    gpType,       // 'sole' | 'coGP' | 'all'
+    years,        // 1, 3, 5, 또는 'all'
+    category,     // 출자분야 (바이오, ICT 등)
+    institution,  // 소관 기관 (중기부, 문체부 등)
+    status,       // 선정, 탈락, 접수
+    search,       // 운용사명/사업명 검색
+    page = 1,
+    limit = 100
+  } = req.query;
+
+  const sheets = await getSheetsClient();
+
+  const [applications, operators, projects] = await Promise.all([
+    sheets.getAllRows('신청현황'),
+    sheets.getAllOperators(),
+    sheets.getAllRows('출자사업')
+  ]);
+
+  const operatorMap = new Map(operators.map(op => [op['ID'], op]));
+  const projectMap = new Map(projects.map(p => [p['ID'], p]));
+
+  // 기간 필터 계산
+  const currentYear = new Date().getFullYear();
+  let startYear = 0;
+  if (years && years !== 'all') {
+    startYear = currentYear - parseInt(years);
+  }
+
+  // 필터링
+  let filtered = applications.filter(app => {
+    const project = projectMap.get(app['출자사업ID']);
+    const projectYear = parseInt(project?.['연도']) || 0;
+
+    // 기간 필터
+    if (startYear > 0 && projectYear < startYear) return false;
+
+    // GP 형태 필터
+    if (gpType && gpType !== 'all') {
+      const isCoGP = app['비고']?.includes('공동GP');
+      if (gpType === 'sole' && isCoGP) return false;
+      if (gpType === 'coGP' && !isCoGP) return false;
+    }
+
+    // 분야 필터
+    if (category) {
+      if (!app['출자분야']?.includes(category)) return false;
+    }
+
+    // 기관(소관) 필터
+    if (institution) {
+      if (project?.['소관'] !== institution) return false;
+    }
+
+    // 상태 필터
+    if (status) {
+      if (app['상태'] !== status) return false;
+    }
+
+    return true;
+  });
+
+  // 조인된 데이터
+  const enriched = filtered.map(app => {
+    const operator = operatorMap.get(app['운용사ID']);
+    const project = projectMap.get(app['출자사업ID']);
+    return {
+      ...app,
+      운용사명: operator?.['운용사명'] || '',
+      사업명: project?.['사업명'] || '',
+      소관: project?.['소관'] || '',
+      연도: project?.['연도'] || '',
+      isCoGP: app['비고']?.includes('공동GP') || false
+    };
+  });
+
+  // 텍스트 검색
+  let results = enriched;
+  if (search) {
+    const searchLower = search.toLowerCase();
+    results = enriched.filter(app =>
+      app['운용사명']?.toLowerCase().includes(searchLower) ||
+      app['사업명']?.toLowerCase().includes(searchLower) ||
+      app['출자분야']?.toLowerCase().includes(searchLower)
+    );
+  }
+
+  // 통계 집계
+  const stats = {
+    total: results.length,
+    selected: results.filter(r => r['상태'] === '선정').length,
+    rejected: results.filter(r => r['상태'] === '탈락').length,
+    pending: results.filter(r => r['상태'] === '접수').length,
+    coGP: results.filter(r => r.isCoGP).length,
+    sole: results.filter(r => !r.isCoGP).length
+  };
+
+  // 페이지네이션
+  const total = results.length;
+  const startIndex = (parseInt(page) - 1) * parseInt(limit);
+  const endIndex = startIndex + parseInt(limit);
+  const paginated = results.slice(startIndex, endIndex);
+
+  res.json({
+    data: paginated,
+    stats,
+    total,
+    page: parseInt(page),
+    limit: parseInt(limit),
+    totalPages: Math.ceil(total / parseInt(limit)),
+    filters: { gpType, years, category, institution, status, search }
+  });
+}));
+
+// 필터 옵션 목록 조회 (분야, 기관 등)
+router.get('/search/options', asyncHandler(async (req, res) => {
+  const sheets = await getSheetsClient();
+
+  const [applications, projects] = await Promise.all([
+    sheets.getAllRows('신청현황'),
+    sheets.getAllRows('출자사업')
+  ]);
+
+  // 출자분야 목록
+  const categories = [...new Set(applications.map(a => a['출자분야']).filter(Boolean))].sort();
+
+  // 소관(기관) 목록
+  const institutions = [...new Set(projects.map(p => p['소관']).filter(Boolean))].sort();
+
+  // 연도 목록
+  const years = [...new Set(projects.map(p => p['연도']).filter(Boolean))].sort((a, b) => b - a);
+
+  res.json({
+    categories,
+    institutions,
+    years,
+    gpTypes: [
+      { value: 'all', label: '전체' },
+      { value: 'sole', label: '단독 GP' },
+      { value: 'coGP', label: '공동 GP' }
+    ],
+    statuses: ['선정', '탈락', '접수'],
+    periodOptions: [
+      { value: '1', label: '최근 1년' },
+      { value: '3', label: '최근 3년' },
+      { value: '5', label: '최근 5년' },
+      { value: 'all', label: '전체 기간' }
+    ]
+  });
+}));
+
+// 탈락 정보 수기 등록 (승률 계산 정확도 향상)
+router.post('/manual/rejected', asyncHandler(async (req, res) => {
+  const { 출자사업ID, 운용사명, 출자분야, 비고 } = req.body;
+
+  if (!출자사업ID || !운용사명) {
+    return res.status(400).json({ error: '출자사업ID와 운용사명은 필수입니다.' });
+  }
+
+  const sheets = await getSheetsClient();
+
+  // 운용사 조회 또는 생성
+  const operatorResult = await sheets.getOrCreateOperator(운용사명);
+  const 운용사ID = operatorResult.id;
+
+  // 중복 체크
+  const existingApps = await sheets.getExistingApplications(출자사업ID);
+  const key = `${운용사ID}|${출자분야 || ''}`;
+  if (existingApps.has(key)) {
+    return res.status(409).json({
+      error: '이미 동일한 신청현황이 존재합니다.',
+      existing: existingApps.get(key)
+    });
+  }
+
+  // 탈락 상태로 등록
+  const newId = await sheets.createApplication({
+    출자사업ID,
+    운용사ID,
+    출자분야: 출자분야 || '',
+    상태: '탈락',
+    비고: `수기입력(탈락) - ${비고 || '업계정보'}`
+  });
+
+  const created = await sheets.findById('신청현황', newId);
+  res.status(201).json({
+    data: created,
+    id: newId,
+    operator: { id: 운용사ID, name: 운용사명, isNew: operatorResult.isNew }
+  });
+}));
+
 export default router;
