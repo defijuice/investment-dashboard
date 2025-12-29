@@ -38,36 +38,135 @@ function createSheetsWrapper(sheets) {
     sheets,
     spreadsheetId: SPREADSHEET_ID,
 
-    async getAllOperators() {
+    async getAllRows(sheetName) {
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: '운용사!A:E'
+        range: `${sheetName}!A:Z`
       });
       return parseSheetData(response.data.values);
+    },
+
+    async getAllOperators() {
+      return this.getAllRows('운용사');
     },
 
     async getAllProjects() {
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: '출자사업!A:J'
-      });
-      return parseSheetData(response.data.values);
+      return this.getAllRows('출자사업');
     },
 
     async getAllApplications() {
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: '신청현황!A:L'
-      });
-      return parseSheetData(response.data.values);
+      return this.getAllRows('신청현황');
     },
 
     async getAllFiles() {
-      const response = await sheets.spreadsheets.values.get({
+      return this.getAllRows('파일');
+    },
+
+    async findById(sheetName, id) {
+      const rows = await this.getAllRows(sheetName);
+      return rows.find(row => row['ID'] === id);
+    },
+
+    async setValues(range, values) {
+      await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: '파일!A:I'
+        range,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values }
       });
-      return parseSheetData(response.data.values);
+    },
+
+    async getExistingApplications(projectId) {
+      const apps = await this.getAllApplications();
+      const existingMap = new Map();
+      apps
+        .filter(app => app['출자사업ID'] === projectId)
+        .forEach(app => {
+          const key = `${app['운용사ID']}|${app['출자분야'] || ''}`;
+          existingMap.set(key, app);
+        });
+      return existingMap;
+    },
+
+    async getOrCreateOperator(operatorName) {
+      const operators = await this.getAllOperators();
+      const existing = operators.find(op => op['운용사명'] === operatorName);
+      if (existing) {
+        return { id: existing['ID'], isNew: false };
+      }
+      // 신규 운용사 생성 로직은 여기서는 생략 (필요시 구현)
+      throw new Error('운용사 생성 기능은 아직 구현되지 않았습니다.');
+    },
+
+    async createApplication(data) {
+      const apps = await this.getAllApplications();
+      const maxIdNum = Math.max(0, ...apps.map(a => {
+        const match = a['ID']?.match(/^APP-(\d+)$/);
+        return match ? parseInt(match[1]) : 0;
+      }));
+      const newId = `APP-${String(maxIdNum + 1).padStart(4, '0')}`;
+
+      const row = [
+        newId,
+        data.출자사업ID || '',
+        data.운용사ID || '',
+        data.출자분야 || '',
+        data.결성예정액 || '',
+        data.출자요청액 || '',
+        data.최소결성규모 || '',
+        data.통화단위 || 'KRW',
+        data.상태 || '접수',
+        data.비고 || ''
+      ];
+
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: '신청현황!A:J',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [row] }
+      });
+
+      return newId;
+    },
+
+    async updateApplicationStatus(id, status) {
+      const app = await this.findById('신청현황', id);
+      if (!app) throw new Error(`Application not found: ${id}`);
+      await this.setValues(`신청현황!I${app._rowIndex}`, [[status]]);
+    },
+
+    async updateFileHistory(id, data) {
+      const file = await this.findById('파일', id);
+      if (!file) throw new Error(`File not found: ${id}`);
+
+      const updates = [];
+      if (data.파일유형 !== undefined) {
+        updates.push({ range: `파일!C${file._rowIndex}`, values: [[data.파일유형]] });
+      }
+      if (data.처리상태 !== undefined) {
+        updates.push({ range: `파일!G${file._rowIndex}`, values: [[data.처리상태]] });
+      }
+      if (data.비고 !== undefined) {
+        updates.push({ range: `파일!J${file._rowIndex}`, values: [[data.비고]] });
+      }
+      if (data.현황 !== undefined) {
+        updates.push({ range: `파일!I${file._rowIndex}`, values: [[data.현황]] });
+      }
+
+      if (updates.length > 0) {
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: SPREADSHEET_ID,
+          requestBody: {
+            valueInputOption: 'USER_ENTERED',
+            data: updates
+          }
+        });
+      }
+    },
+
+    async deleteRow(sheetName, rowIndex) {
+      // 간단한 구현: 해당 행을 빈 값으로 클리어
+      await this.setValues(`${sheetName}!A${rowIndex}:Z${rowIndex}`, [[]]);
     },
 
     async updateApplication(id, data) {
