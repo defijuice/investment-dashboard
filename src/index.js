@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { KvicScraper } from './core/scraper.js';
 import { GoogleDriveUploader } from './core/googleDrive.js';
+import { GoogleSheetsClient } from './core/googleSheets.js';
 
 // 환경 변수 검증
 function validateEnv() {
@@ -64,10 +65,14 @@ async function main() {
     folderId: process.env.GOOGLE_DRIVE_FOLDER_ID
   });
 
+  // Google Sheets 초기화
+  const sheets = new GoogleSheetsClient({ credentialsPath });
+
   try {
     await uploader.init();
+    await sheets.init();
   } catch (error) {
-    console.error('\nGoogle Drive 초기화 실패:', error.message);
+    console.error('\n초기화 실패:', error.message);
     process.exit(1);
   }
 
@@ -82,14 +87,19 @@ async function main() {
     await scraper.init();
     console.log('\n브라우저 초기화 완료\n');
 
-    // 최근 5페이지만 스캔 (조정 가능)
-    const maxPages = parseInt(process.env.MAX_PAGES || '5', 10);
+    // 페이지 범위 설정 (환경 변수로 제어 가능)
+    const startPage = parseInt(process.env.START_PAGE || '1', 10);
+    const endPage = parseInt(process.env.END_PAGE || process.env.MAX_PAGES || '5', 10);
     let totalNewFiles = 0;
     let totalSkipped = 0;
 
-    for (let page = 1; page <= maxPages; page++) {
+    console.log(`페이지 ${startPage}~${endPage} 스캔 시작\n`);
+
+    for (let page = startPage; page <= endPage; page++) {
+      const progress = ((page - startPage + 1) / (endPage - startPage + 1) * 100).toFixed(1);
       console.log(`\n${'─'.repeat(50)}`);
-      console.log(`페이지 ${page}/${maxPages} 처리 중...`);
+      console.log(`페이지 ${page}/${endPage} (진행률: ${progress}%)`);
+      console.log(`누적: 신규 ${totalNewFiles}개, 스킵 ${totalSkipped}개`);
       console.log('─'.repeat(50));
 
       const notices = await scraper.getNoticeList(page);
@@ -135,6 +145,25 @@ async function main() {
 
             if (uploadResult.success) {
               totalNewFiles++;
+
+              // 파일 시트에 등록
+              const fileName = path.basename(localPath);
+              const fileType = notice.category === '접수현황' ? '접수현황' : '선정결과';
+
+              await sheets.appendRows('파일', [[
+                '', // ID (자동 생성)
+                fileName,
+                notice.id,
+                fileType,
+                uploadResult.webViewLink,
+                '미처리',
+                '',
+                '',
+                ''
+              ]]);
+
+              console.log(`  파일 시트 등록 완료: ${fileName}`);
+
               // 로컬 파일 삭제 (선택적)
               // fs.unlinkSync(localPath);
             }

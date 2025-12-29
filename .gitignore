@@ -6,6 +6,9 @@ processed.json
 *.log
 .DS_Store
 
+# Verification reports
+reports/
+
 # Admin frontend
 admin/node_modules/
 admin/dist/

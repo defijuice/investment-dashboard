@@ -14,6 +14,7 @@
 import { GoogleSheetsClient } from '../core/googleSheets.js';
 import { parsePdfWithPdfplumber } from '../processors/pdf-compare.js';
 import { calculateOperatorSimilarity } from '../matchers/operator-matcher.js';
+import { VerificationReporter } from '../workflows/verification-report.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -294,7 +295,7 @@ function verifyFile(file, project, allApplications, operatorMap, options) {
 /**
  * 전체 검증
  */
-async function verifyAll(sheets, options) {
+async function verifyAll(sheets, options, reporter = null) {
   const results = {
     projects: [],
     totalMatched: 0,
@@ -387,6 +388,17 @@ async function verifyAll(sheets, options) {
           file,
           fileName: fileResult.fileName
         });
+
+        // 리포터에 문제 기록 (PDF에만 있음 = 운용사 누락)
+        if (reporter) {
+          reporter.addIssue({
+            severity: 'error',
+            title: '운용사 누락',
+            description: `PDF에 "${op.name}" 운용사가 있으나 DB에 없음`,
+            cause: '신규 운용사 미등록 또는 잘못된 매칭',
+            location: `${file['ID']} - ${op.category || '(분야 미지정)'}`
+          });
+        }
       }
 
       for (const app of fileResult.comparison.onlyInSheet) {
@@ -396,6 +408,9 @@ async function verifyAll(sheets, options) {
           file,
           fileName: fileResult.fileName
         });
+
+        // Sheet에만 있음은 정상 (다른 파일 또는 탈락)
+        // 리포트에 기록하지 않음
       }
     }
 
@@ -497,8 +512,11 @@ function printReport(results) {
       results.totalOnlyInPdf === 0 &&
       results.totalOnlyInSheet === 0 &&
       results.duplicateOperators.length === 0) {
-    console.log('\n모든 운용사 매칭이 정확합니다!');
+    console.log('\n✅ 모든 운용사 매칭이 정확합니다!');
+    return true;
   }
+
+  return false;
 }
 
 /**
@@ -515,8 +533,84 @@ async function main() {
   const sheets = new GoogleSheetsClient();
   await sheets.init();
 
-  const results = await verifyAll(sheets, options);
-  printReport(results);
+  // 리포터 생성 (특정 출자사업 검증 시에만)
+  let reporter = null;
+  let projectData = null;
+  if (options.projectId) {
+    const project = await sheets.findRow('출자사업', 'ID', options.projectId);
+    if (project) {
+      projectData = {
+        사업명: project['사업명'] || '',
+        소관: project['소관'] || '',
+        연도: project['연도'] || '',
+        차수: project['차수'] || ''
+      };
+      reporter = new VerificationReporter(options.projectId, projectData);
+    }
+  }
+
+  const results = await verifyAll(sheets, options, reporter);
+  const isValid = printReport(results);
+
+  // 리포터가 있으면 통계 설정 및 리포트 생성
+  if (reporter && results.projects.length > 0) {
+    // 통계 수집
+    const projectResult = results.projects[0];
+    const stats = {
+      fileCount: projectResult.files.length,
+      totalApplications: results.totalMatched + results.totalSimilar + results.totalOnlyInPdf,
+      selectedCount: 0,
+      rejectedCount: 0,
+      byCategory: {},
+      notes: []
+    };
+
+    // 분야별 통계 계산
+    const allApplications = await sheets.getAllRows('신청현황');
+    const projectApps = allApplications.filter(app => app['출자사업ID'] === options.projectId);
+
+    for (const app of projectApps) {
+      const category = app['출자분야'] || '(분야 미지정)';
+      const status = app['상태'] || '';
+
+      if (!stats.byCategory[category]) {
+        stats.byCategory[category] = { applied: 0, selected: 0 };
+      }
+      stats.byCategory[category].applied++;
+
+      if (status === '선정') {
+        stats.selectedCount++;
+        stats.byCategory[category].selected++;
+      } else if (status === '탈락') {
+        stats.rejectedCount++;
+      }
+    }
+
+    stats.totalApplications = projectApps.length;
+
+    reporter.setStatistics(stats);
+
+    // 리포트 생성
+    const finalStatus = isValid ? 'AI자동수정완료' :
+                       (results.totalOnlyInPdf > 0 || results.totalOnlyInSheet > 0) ? '검증실패' :
+                       'AI확인완료';
+
+    const reportPath = await reporter.generateReport(finalStatus);
+    console.log(`\n📄 검증 리포트: ${reportPath}`);
+  }
+
+  // 검증 통과 시 출자사업 확인완료 상태 업데이트
+  if (isValid && options.projectId) {
+    console.log(`\n[확인완료 업데이트] ${options.projectId} → AI확인완료`);
+    await sheets.updateProjectVerification(options.projectId, 'AI확인완료');
+  } else if (isValid && !options.projectId && !options.fileId) {
+    // 전체 검증 시 모든 출자사업 업데이트
+    console.log('\n[확인완료 일괄 업데이트] 모든 출자사업 → AI확인완료');
+    const projects = await sheets.getAllRows('출자사업');
+    for (const project of projects) {
+      await sheets.updateProjectVerification(project['ID'], 'AI확인완료');
+    }
+  }
 }
 
 main().catch(console.error);

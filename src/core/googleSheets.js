@@ -469,7 +469,7 @@ export class GoogleSheetsClient {
     // 새 ID 생성
     const newId = await this.getNextId('출자사업', 'PJ');
 
-    // 새 행 추가: ID, 사업명, 소관, 공고유형, 연도, 차수, 지원파일ID, 결과파일ID
+    // 새 행 추가: ID, 사업명, 소관, 공고유형, 연도, 차수, 지원파일ID, 결과파일ID, 현황, 비고, 확인완료
     const newRow = [
       newId,
       projectName,
@@ -478,7 +478,10 @@ export class GoogleSheetsClient {
       data.연도 || '',
       data.차수 || '',
       data.지원파일ID || '',
-      data.결과파일ID || ''
+      data.결과파일ID || '',
+      '', // 현황
+      '', // 비고
+      ''  // 확인완료 (기본값: 비어있음)
     ];
     await this.appendRows('출자사업', [newRow]);
 
@@ -538,18 +541,19 @@ export class GoogleSheetsClient {
     // 새 ID 생성
     const newId = await this.getNextId('신청현황', 'AP');
 
-    // 헤더: ID, 출자사업ID, 운용사ID, 출자분야, 결성예정액, 출자요청액, 최소결성규모, 통화단위, 상태, 비고
+    // 헤더: ID, 출자사업ID, 운용사ID, 출자분야, 최소결성규모, 모태출자액, 결성예정액, 출자요청액, 통화단위, 상태, 비고
     const newRow = [
       newId,                    // A: ID
       data.출자사업ID || '',     // B: 출자사업ID
-      data.운용사ID || '',       // C: 운용사ID (쉼표로 연결)
+      data.운용사ID || '',       // C: 운용사ID
       data.출자분야 || '',       // D: 출자분야
-      data.결성예정액 || '',     // E: 결성예정액
-      data.출자요청액 || '',     // F: 출자요청액
-      data.최소결성규모 || '',   // G: 최소결성규모
-      data.통화단위 || '',       // H: 통화단위
-      data.상태 || '',          // I: 상태
-      data.비고 || ''           // J: 비고
+      data.최소결성규모 || '',   // E: 최소결성규모
+      data.모태출자액 || '',     // F: 모태출자액
+      data.결성예정액 || '',     // G: 결성예정액
+      data.출자요청액 || '',     // H: 출자요청액
+      data.통화단위 || '',       // I: 통화단위
+      data.상태 || '',          // J: 상태
+      data.비고 || ''           // K: 비고
     ];
     await this.appendRows('신청현황', [newRow]);
 
@@ -584,9 +588,10 @@ export class GoogleSheetsClient {
         data.출자사업ID || '',
         data.운용사ID || '',
         data.출자분야 || '',
+        data.최소결성규모 || '',
+        data.모태출자액 || '',
         data.결성예정액 || '',
         data.출자요청액 || '',
-        data.최소결성규모 || '',
         data.통화단위 || '',
         data.상태 || '',
         data.비고 || ''
@@ -726,6 +731,26 @@ export class GoogleSheetsClient {
     }
 
     console.log('=== 현황 업데이트 완료 ===\n');
+  }
+
+  /**
+   * 출자사업 확인완료 상태 업데이트
+   * @param {string} projectId - 출자사업 ID
+   * @param {string} status - 'AI확인완료' 또는 '사람확인완료'
+   */
+  async updateProjectVerification(projectId, status) {
+    if (!['AI확인완료', '사람확인완료'].includes(status)) {
+      throw new Error(`잘못된 확인완료 상태: ${status}. 'AI확인완료' 또는 '사람확인완료'만 가능합니다.`);
+    }
+
+    const project = await this.findById('출자사업', projectId);
+    if (!project || !project._rowIndex) {
+      throw new Error(`출자사업을 찾을 수 없습니다: ${projectId}`);
+    }
+
+    // 확인완료는 K열 (11번째)
+    await this.setValues(`출자사업!K${project._rowIndex}`, [[status]]);
+    console.log(`  [확인완료 업데이트] ${projectId}: ${status}`);
   }
 
   // ========== 약어 캐시 로드 ==========
@@ -1001,5 +1026,77 @@ export class GoogleSheetsClient {
     }
 
     return pairs;
+  }
+
+  // ========== AI 검증용 역조회 메서드 ==========
+
+  /**
+   * 파일 ID로 연결된 신청현황 조회 (파일→출자사업→신청현황)
+   * @param {string} fileId - 파일 ID (예: FH0001)
+   * @returns {Array} 신청현황 배열
+   */
+  async getApplicationsByFile(fileId) {
+    const allProjects = await this.getAllRows('출자사업');
+    const allApplications = await this.getAllRows('신청현황');
+
+    // 파일 ID가 연결된 모든 출자사업 찾기
+    const linkedProjects = allProjects.filter(project => {
+      const appFileIds = (project['지원파일ID'] || '').split(',').map(s => s.trim());
+      const selFileIds = (project['결과파일ID'] || '').split(',').map(s => s.trim());
+      return appFileIds.includes(fileId) || selFileIds.includes(fileId);
+    });
+
+    const linkedProjectIds = linkedProjects.map(p => p['ID']);
+
+    // 연결된 출자사업의 신청현황 반환
+    return allApplications.filter(app => linkedProjectIds.includes(app['출자사업ID']));
+  }
+
+  /**
+   * 출자사업 ID로 연결된 파일 조회
+   * @param {string} projectId - 출자사업 ID (예: PJ0001)
+   * @returns {Object} { applicationFiles: [...], selectionFiles: [...] }
+   */
+  async getFilesByProject(projectId) {
+    const project = await this.findRow('출자사업', 'ID', projectId);
+    if (!project) {
+      return { applicationFiles: [], selectionFiles: [] };
+    }
+
+    const allFiles = await this.getAllRows('파일');
+
+    const appFileIds = (project['지원파일ID'] || '').split(',').map(s => s.trim()).filter(Boolean);
+    const selFileIds = (project['결과파일ID'] || '').split(',').map(s => s.trim()).filter(Boolean);
+
+    const applicationFiles = allFiles.filter(f => appFileIds.includes(f['ID']));
+    const selectionFiles = allFiles.filter(f => selFileIds.includes(f['ID']));
+
+    return { applicationFiles, selectionFiles };
+  }
+
+  /**
+   * 출자사업 ID로 신청현황 조회 (이미 있지만 명시적으로 추가)
+   * @param {string} projectId - 출자사업 ID
+   * @returns {Array} 신청현황 배열
+   */
+  async getApplicationsByProject(projectId) {
+    const allApplications = await this.getAllRows('신청현황');
+    return allApplications.filter(app => app['출자사업ID'] === projectId);
+  }
+
+  /**
+   * 출자사업 확인완료 필드 업데이트
+   * @param {string} projectId - 출자사업 ID
+   * @param {string} status - 확인완료 상태 (예: 'AI확인완료', '수동확인필요')
+   */
+  async updateProjectVerificationStatus(projectId, status) {
+    const project = await this.findRow('출자사업', 'ID', projectId);
+    if (!project || !project._rowIndex) {
+      throw new Error(`출자사업 ${projectId}를 찾을 수 없습니다.`);
+    }
+
+    // 확인완료 필드는 J열 (10번째 컬럼)
+    await this.setValues(`출자사업!J${project._rowIndex}`, [[status]]);
+    console.log(`  [출자사업 확인완료] ${projectId}: ${status}`);
   }
 }
