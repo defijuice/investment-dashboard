@@ -308,6 +308,36 @@ for (const [key, appInfo] of existingApps) {
 총 N개 중 선정 M건
 ```
 
+### 5-3. 약어 자동 업데이트
+
+**운용사 매칭 시 다른 표기 발견하면 약어에 추가:**
+
+유사도 매칭으로 기존 운용사를 사용한 경우, 파싱된 운용사명이 기존 운용사명과 다르면 자동으로 약어 필드에 추가:
+
+```javascript
+// 예: 기존 "KB인베스트먼트" (OP0001) + 파싱 결과 "KB투자"
+if (matchedOperatorName !== parsedName) {
+  await sheets.updateOperatorAlias(operatorId, parsedName);
+  // → 약어 필드: "KB투자" 추가
+}
+```
+
+**처리 시점:**
+
+- 접수현황 처리 시: 매칭된 운용사의 다른 표기 발견
+- 선정결과 처리 시: 매칭된 운용사의 다른 표기 발견
+
+**효과:**
+
+- 차후 동일한 표기로 검색 시 자동 매칭됨
+- 운용사명 변이 히스토리 자동 누적
+
+**실제 구현 위치:**
+
+- [src/process-pair-sheets.js:534-543](src/process-pair-sheets.js#L534-L543) - 유사도 매칭 후 약어 추가 로직
+- [src/process-pair-sheets.js:661-668](src/process-pair-sheets.js#L661-L668) - 새 약어 일괄 저장
+- [src/googleSheets.js:412-431](src/googleSheets.js#L412-L431) - `updateOperatorAlias()` 메서드
+
 ---
 
 ## Step 6: 파일 및 출자사업 현황 업데이트
