@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { filesApi } from '../api/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { filesApi, applicationsApi } from '../api/client';
+import toast, { Toaster } from 'react-hot-toast';
+import EditableCell from '../components/EditableCell';
 
 const STATUS_COLORS = {
   선정: 'bg-green-100 text-green-700',
@@ -12,6 +14,7 @@ const STATUS_COLORS = {
 export default function FileCompare() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('전체');
   const [categoryFilter, setCategoryFilter] = useState('전체');
@@ -20,6 +23,19 @@ export default function FileCompare() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['file-applications', id],
     queryFn: () => filesApi.getApplications(id).then((res) => res.data.data)
+  });
+
+  // 신청현황 수정 mutation
+  const updateMutation = useMutation({
+    mutationFn: ({ appId, field, value }) =>
+      applicationsApi.update(appId, { [field]: value }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['file-applications', id] });
+      toast.success('저장되었습니다');
+    },
+    onError: (err) => {
+      toast.error('저장 실패: ' + (err.response?.data?.error || err.message));
+    }
   });
 
   if (isLoading) {
@@ -38,7 +54,7 @@ export default function FileCompare() {
     );
   }
 
-  const { file, linkedProjects, applications, stats } = data;
+  const { file, linkedProjects, applications, stats, verification } = data;
 
   // 필터링
   let filteredApps = applications;
@@ -95,10 +111,60 @@ export default function FileCompare() {
         </div>
       </div>
 
+      <Toaster position="top-right" />
+
       {/* 메인 콘텐츠 - 2분할 */}
       <div className="flex-1 flex overflow-hidden">
         {/* 왼쪽: PDF 뷰어 */}
         <div className="w-1/2 border-r bg-gray-100 flex flex-col">
+          {/* 검증 요약 패널 */}
+          {verification && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 m-4 rounded">
+              <h3 className="font-bold text-yellow-800 mb-2">📋 검증 요약</h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-gray-600">PDF 기재:</span>
+                  <span className="font-medium ml-2">{verification.pdfExpectedCount}건</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">DB 저장:</span>
+                  <span className="font-medium ml-2">{verification.dbActualCount}건</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">차이:</span>
+                  <span className={`font-medium ml-2 ${verification.difference === 0 ? 'text-green-600' : 'text-orange-600'}`}>
+                    {verification.difference > 0 ? '+' : ''}{verification.difference}건
+                  </span>
+                  {verification.coGPCount > 0 && (
+                    <span className="text-gray-500 text-xs ml-2">
+                      (공동GP 분리 +{verification.coGPCount}건)
+                    </span>
+                  )}
+                </div>
+                {file['파일유형'] === '선정결과' && (
+                  <div>
+                    <span className="text-gray-600">금액 누락:</span>
+                    <span className={`font-medium ml-2 ${verification.missingAmountCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {verification.missingAmountCount}건
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* 상태 오류 항목 */}
+              {verification.stateIssues?.length > 0 && (
+                <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded">
+                  <p className="font-medium text-red-800 text-sm">⚠️ 상태 오류 {verification.stateIssues.length}건</p>
+                  <ul className="mt-1 text-xs text-red-700 max-h-20 overflow-y-auto">
+                    {verification.stateIssues.map((issue, idx) => (
+                      <li key={idx}>• {issue.operatorName}: {issue.issue}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="bg-white px-4 py-2 border-b flex items-center justify-between">
             <span className="font-medium text-gray-700">원본 PDF</span>
             {fileUrl && (
@@ -207,7 +273,17 @@ export default function FileCompare() {
                   <tr>
                     <th className="px-4 py-2 text-left font-medium text-gray-600">운용사명</th>
                     <th className="px-4 py-2 text-left font-medium text-gray-600">출자분야</th>
-                    <th className="px-4 py-2 text-left font-medium text-gray-600">결성예정액</th>
+                    {file['파일유형'] === '선정결과' ? (
+                      <>
+                        <th className="px-4 py-2 text-left font-medium text-gray-600">결성예정액</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-600">출자요청액</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-600">최소결성규모</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-600">모태출자액</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-600">통화</th>
+                      </>
+                    ) : (
+                      <th className="px-4 py-2 text-left font-medium text-gray-600">결성예정액</th>
+                    )}
                     <th className="px-4 py-2 text-center font-medium text-gray-600">상태</th>
                     <th className="px-4 py-2 text-left font-medium text-gray-600">비고</th>
                   </tr>
@@ -216,16 +292,106 @@ export default function FileCompare() {
                   {filteredApps.map((app) => (
                     <tr key={app.ID} className="hover:bg-gray-50">
                       <td className="px-4 py-2 font-medium">{app['운용사명']}</td>
-                      <td className="px-4 py-2 text-gray-600">{app['출자분야']}</td>
-                      <td className="px-4 py-2 text-gray-600">
-                        {app['결성예정액'] ? `${app['결성예정액']}${app['통화단위'] || '억원'}` : '-'}
+                      <td className="px-4 py-2">
+                        <EditableCell
+                          value={app['출자분야']}
+                          type="text"
+                          onSave={(value) => updateMutation.mutate({
+                            appId: app.ID,
+                            field: '출자분야',
+                            value
+                          })}
+                        />
                       </td>
+                      {file['파일유형'] === '선정결과' ? (
+                        <>
+                          <td className="px-4 py-2">
+                            <EditableCell
+                              value={app['결성예정액']}
+                              type="text"
+                              onSave={(value) => updateMutation.mutate({
+                                appId: app.ID,
+                                field: '결성예정액',
+                                value
+                              })}
+                              className={!app['결성예정액'] ? 'bg-red-50' : ''}
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <EditableCell
+                              value={app['출자요청액']}
+                              type="text"
+                              onSave={(value) => updateMutation.mutate({
+                                appId: app.ID,
+                                field: '출자요청액',
+                                value
+                              })}
+                              className={!app['출자요청액'] ? 'bg-red-50' : ''}
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <EditableCell
+                              value={app['최소결성규모']}
+                              type="text"
+                              onSave={(value) => updateMutation.mutate({
+                                appId: app.ID,
+                                field: '최소결성규모',
+                                value
+                              })}
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <EditableCell
+                              value={app['모태출자액']}
+                              type="text"
+                              onSave={(value) => updateMutation.mutate({
+                                appId: app.ID,
+                                field: '모태출자액',
+                                value
+                              })}
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <EditableCell
+                              value={app['통화단위']}
+                              type="select"
+                              options={['KRW', 'USD', 'EUR', 'JPY']}
+                              onSave={(value) => updateMutation.mutate({
+                                appId: app.ID,
+                                field: '통화단위',
+                                value
+                              })}
+                            />
+                          </td>
+                        </>
+                      ) : (
+                        <td className="px-4 py-2 text-gray-600">
+                          {app['결성예정액'] ? `${app['결성예정액']}${app['통화단위'] || '억원'}` : '-'}
+                        </td>
+                      )}
                       <td className="px-4 py-2 text-center">
-                        <span className={`px-2 py-0.5 rounded text-xs ${STATUS_COLORS[app['상태']] || ''}`}>
-                          {app['상태']}
-                        </span>
+                        <EditableCell
+                          value={app['상태']}
+                          type="select"
+                          options={['접수', '선정', '탈락']}
+                          onSave={(value) => updateMutation.mutate({
+                            appId: app.ID,
+                            field: '상태',
+                            value
+                          })}
+                        />
                       </td>
-                      <td className="px-4 py-2 text-gray-500 text-xs">{app['비고']}</td>
+                      <td className="px-4 py-2">
+                        <EditableCell
+                          value={app['비고']}
+                          type="text"
+                          onSave={(value) => updateMutation.mutate({
+                            appId: app.ID,
+                            field: '비고',
+                            value
+                          })}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

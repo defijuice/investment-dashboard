@@ -531,6 +531,19 @@ async function processPair(applicationFileNo, selectionFileNo) {
       newAliases.push({ operatorId: operator.id, alias: matchedAlias, fullName: applicant.name });
     }
 
+    // 유사도 매칭으로 기존 운용사 사용한 경우, 신규 이름을 약어에 추가
+    const decision = operatorDecisions.get(applicant.name);
+    if (decision?.useExisting && applicant.name !== decision.existingName) {
+      // 신규 이름이 기존 약어에 없으면 추가
+      if (!aliasCache.has(applicant.name)) {
+        newAliases.push({
+          operatorId: operator.id,
+          alias: applicant.name,
+          fullName: decision.existingName
+        });
+      }
+    }
+
     // 신청현황 레코드 생성
     const status = applicant.status;
     let currency = '';
@@ -583,6 +596,15 @@ async function processPair(applicationFileNo, selectionFileNo) {
       operatorId = decision.existingId;
       operatorName = decision.existingName;
       console.log(`    → 유사도 검토: ${s.name} → ${operatorName} (${operatorId})`);
+
+      // 신규 이름을 약어에 추가
+      if (s.name !== operatorName && !aliasCache.has(s.name)) {
+        newAliases.push({
+          operatorId: operatorId,
+          alias: s.name,
+          fullName: operatorName
+        });
+      }
     } else {
       // 약어로 기존 운용사 찾기
       operatorId = findOperatorIdByAlias(s.name);

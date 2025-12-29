@@ -109,12 +109,74 @@ router.get('/:id/applications', asyncHandler(async (req, res) => {
     접수: applications.filter(app => app['상태'] === '접수').length
   };
 
+  // ===== 검증 정보 생성 =====
+
+  // 1. PDF 기재 건수 파싱
+  const currentStatus = file['현황'] || '';
+  let pdfExpectedCount = 0;
+
+  if (file['파일유형'] === '접수현황') {
+    // "신청조합 149개" 추출
+    const match = currentStatus.match(/신청조합\s+(\d+)개/);
+    pdfExpectedCount = match ? parseInt(match[1]) : 0;
+  } else if (file['파일유형'] === '선정결과') {
+    // "총 165개" 추출
+    const match = currentStatus.match(/총\s+(\d+)개/);
+    pdfExpectedCount = match ? parseInt(match[1]) : 0;
+  }
+
+  // 2. 공동GP 건수
+  const coGPCount = applications.filter(app =>
+    app['비고']?.includes('공동GP')
+  ).length;
+
+  // 3. 금액 누락 건수 (선정결과만)
+  let missingAmountCount = 0;
+  if (file['파일유형'] === '선정결과') {
+    missingAmountCount = applications.filter(app =>
+      !app['결성예정액'] && !app['출자요청액']
+    ).length;
+  }
+
+  // 4. 상태 오류 검사
+  const stateIssues = [];
+
+  // 선정/탈락인데 접수 상태가 없는 경우 (이전 접수 파일 처리 누락)
+  for (const app of applications) {
+    if ((app['상태'] === '선정' || app['상태'] === '탈락')) {
+      // 동일 운용사ID + 출자사업ID로 접수 상태 확인
+      const hasReception = applications.some(a =>
+        a['운용사ID'] === app['운용사ID'] &&
+        a['출자사업ID'] === app['출자사업ID'] &&
+        a['상태'] === '접수'
+      );
+
+      if (!hasReception) {
+        stateIssues.push({
+          operatorName: app['운용사명'],
+          issue: '접수 없이 선정/탈락만 존재',
+          appId: app['ID']
+        });
+      }
+    }
+  }
+
+  const verification = {
+    pdfExpectedCount,
+    dbActualCount: applications.length,
+    coGPCount,
+    difference: applications.length - pdfExpectedCount,
+    missingAmountCount,
+    stateIssues
+  };
+
   res.json({
     data: {
       file,
       linkedProjects,
       applications: enrichedApplications,
-      stats
+      stats,
+      verification
     }
   });
 }));

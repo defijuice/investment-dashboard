@@ -412,9 +412,23 @@ export class GoogleSheetsClient {
   async updateOperatorAlias(operatorId, alias) {
     const row = await this.findById('운용사', operatorId);
     if (row && row._rowIndex) {
-      // 약어는 C열 (3번째)
-      await this.setValues(`운용사!C${row._rowIndex}`, [[alias]]);
-      console.log(`  [약어 저장] ${operatorId}: ${alias}`);
+      const existingAlias = row['약어'] || '';
+
+      // 기존 약어가 있으면 중복 체크 후 추가
+      if (existingAlias) {
+        const aliases = existingAlias.split(',').map(a => a.trim());
+        if (!aliases.includes(alias)) {
+          const newAlias = existingAlias + ', ' + alias;
+          await this.setValues(`운용사!C${row._rowIndex}`, [[newAlias]]);
+          console.log(`  [약어 추가] ${operatorId}: ${existingAlias} → ${newAlias}`);
+        } else {
+          console.log(`  [약어 중복] ${operatorId}: "${alias}" 이미 존재`);
+        }
+      } else {
+        // 기존 약어 없으면 그대로 저장
+        await this.setValues(`운용사!C${row._rowIndex}`, [[alias]]);
+        console.log(`  [약어 저장] ${operatorId}: ${alias}`);
+      }
     }
   }
 
