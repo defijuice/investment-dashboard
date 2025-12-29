@@ -135,10 +135,10 @@ PDF 파일을 Read 도구로 직접 읽고 다음 정보를 추출:
 
 ```bash
 # 접수현황
-python3 src/pdf-parser.py "downloads/<파일명>.pdf"
+python3 src/processors/pdf-parser.py "downloads/<파일명>.pdf"
 
 # 선정결과
-python3 src/pdf-parser.py "downloads/<파일명>.pdf" --selection
+python3 src/processors/pdf-parser.py "downloads/<파일명>.pdf" --selection
 ```
 
 ### 2-2. HWP 파일인 경우 (Playwright MCP 캡처)
@@ -334,9 +334,9 @@ if (matchedOperatorName !== parsedName) {
 
 **실제 구현 위치:**
 
-- [src/process-pair-sheets.js:534-543](src/process-pair-sheets.js#L534-L543) - 유사도 매칭 후 약어 추가 로직
-- [src/process-pair-sheets.js:661-668](src/process-pair-sheets.js#L661-L668) - 새 약어 일괄 저장
-- [src/googleSheets.js:412-431](src/googleSheets.js#L412-L431) - `updateOperatorAlias()` 메서드
+- [src/processors/process-pair-sheets.js:534-543](src/processors/process-pair-sheets.js#L534-L543) - 유사도 매칭 후 약어 추가 로직
+- [src/processors/process-pair-sheets.js:661-668](src/processors/process-pair-sheets.js#L661-L668) - 새 약어 일괄 저장
+- [src/core/googleSheets.js:412-431](src/core/googleSheets.js#L412-L431) - `updateOperatorAlias()` 메서드
 
 ---
 

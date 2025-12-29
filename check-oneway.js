@@ -1,4 +1,4 @@
-import { GoogleSheetsClient } from './src/googleSheets.js';
+import { GoogleSheetsClient } from './src/core/googleSheets.js';
 
 (async () => {
   const client = new GoogleSheetsClient();

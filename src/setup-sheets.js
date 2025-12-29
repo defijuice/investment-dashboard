@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config({ path: './.env', override: true });
 
-import { GoogleSheetsClient } from './googleSheets.js';
+import { GoogleSheetsClient } from './core/googleSheets.js';
 
 // ========== 시트 구조 정의 ==========
 // 각 테이블에 고유 ID 추가, 신청현황에서는 ID로 참조

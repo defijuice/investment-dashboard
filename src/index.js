@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import path from 'path';
 import fs from 'fs';
-import { KvicScraper } from './scraper.js';
-import { GoogleDriveUploader } from './googleDrive.js';
+import { KvicScraper } from './core/scraper.js';
+import { GoogleDriveUploader } from './core/googleDrive.js';
 
 // 환경 변수 검증
 function validateEnv() {

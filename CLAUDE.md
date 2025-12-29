@@ -41,7 +41,7 @@ npm start
 node src/setup-sheets.js
 
 # PDF 처리 (Google Sheets 버전)
-node src/process-pair-sheets.js <접수파일번호> <선정파일번호>
+node src/processors/process-pair-sheets.js <접수파일번호> <선정파일번호>
 ```
 
 ## Architecture
@@ -49,13 +49,13 @@ node src/process-pair-sheets.js <접수파일번호> <선정파일번호>
 ### Core Components
 
 - **[src/index.js](src/index.js)**: 메인 진입점. 스크래핑 → 다운로드 → 업로드 워크플로우 실행. `processed.json`으로 중복 처리 방지
-- **[src/scraper.js](src/scraper.js)**: Puppeteer 기반 KVIC 공지사항 스크래퍼. 접수현황/선정결과 카테고리만 필터링
-- **[src/googleDrive.js](src/googleDrive.js)**: Google Drive OAuth 인증 및 파일 업로드. 토큰은 `credentials/token.json`에 캐시
-- **[src/googleSheets.js](src/googleSheets.js)**: Google Sheets API 클라이언트. OAuth 인증, CRUD, Data Validation 설정
+- **[src/core/scraper.js](src/core/scraper.js)**: Puppeteer 기반 KVIC 공지사항 스크래퍼. 접수현황/선정결과 카테고리만 필터링
+- **[src/core/googleDrive.js](src/core/googleDrive.js)**: Google Drive OAuth 인증 및 파일 업로드. 토큰은 `credentials/token.json`에 캐시
+- **[src/core/googleSheets.js](src/core/googleSheets.js)**: Google Sheets API 클라이언트. OAuth 인증, CRUD, Data Validation 설정
 - **[src/setup-sheets.js](src/setup-sheets.js)**: 시트 초기화 (헤더, 드롭다운 설정)
-- **[src/process-pair-sheets.js](src/process-pair-sheets.js)**: PDF 파싱 후 Sheets에 저장 (접수현황+선정결과 쌍 처리). 검토/승인 워크플로우 포함
-- **[src/review-workflow.js](src/review-workflow.js)**: PDF 처리 검토/승인 모듈. 터미널 테이블로 파싱 결과 표시, 수정/승인 인터랙션
-- **[src/pdf-parser.py](src/pdf-parser.py)**: pdfplumber 기반 PDF 표 파서. Node.js에서 호출하여 사용
+- **[src/processors/process-pair-sheets.js](src/processors/process-pair-sheets.js)**: PDF 파싱 후 Sheets에 저장 (접수현황+선정결과 쌍 처리). 검토/승인 워크플로우 포함
+- **[src/workflows/review-workflow.js](src/workflows/review-workflow.js)**: PDF 처리 검토/승인 모듈. 터미널 테이블로 파싱 결과 표시, 수정/승인 인터랙션
+- **[src/processors/pdf-parser.py](src/processors/pdf-parser.py)**: pdfplumber 기반 PDF 표 파서. Node.js에서 호출하여 사용
 
 ### Data Flow
 
@@ -79,8 +79,8 @@ node src/process-pair-sheets.js <접수파일번호> <선정파일번호>
 
 **관련 파일**:
 
-- [src/pdf-compare.js](src/pdf-compare.js): 두 파싱 결과 비교 모듈
-- [src/pdf-parser.py](src/pdf-parser.py): pdfplumber 기반 PDF 파서
+- [src/processors/pdf-compare.js](src/processors/pdf-compare.js): 두 파싱 결과 비교 모듈
+- [src/processors/pdf-parser.py](src/processors/pdf-parser.py): pdfplumber 기반 PDF 파서
 
 ### 검토/승인 워크플로우
 
@@ -140,7 +140,7 @@ PDF 처리 시 저장 전 검토 단계가 있음:
 
 예: `총 165개 중 선정 43건`
 
-**관련 파일**: [src/file-summary.js](src/file-summary.js)
+**관련 파일**: [src/workflows/file-summary.js](src/workflows/file-summary.js)
 
 ### ⚠️ 파일 현황 동기화 규칙 (CRITICAL)
 
@@ -224,7 +224,7 @@ await sheets.syncFileStatusWithApplications(fileId);
 
 ### 운용사 매칭 규칙
 
-**관련 파일**: [src/operator-matcher.js](src/operator-matcher.js)
+**관련 파일**: [src/matchers/operator-matcher.js](src/matchers/operator-matcher.js)
 
 신규 운용사 등록 전 기존 운용사와 유사도를 검사하여 중복 등록 방지:
 
@@ -256,7 +256,7 @@ await sheets.syncFileStatusWithApplications(fileId);
 
 ### 운용사 중복 병합
 
-**관련 파일**: [src/operator-audit.js](src/operator-audit.js)
+**관련 파일**: [src/matchers/operator-audit.js](src/matchers/operator-audit.js)
 
 중복 운용사 발견 시 하나로 병합하고 나머지는 삭제:
 
@@ -264,13 +264,13 @@ await sheets.syncFileStatusWithApplications(fileId);
 
 ```bash
 # 중복 리포트 (유사도 85% 이상 운용사 쌍 찾기)
-node src/operator-audit.js report
+node src/matchers/operator-audit.js report
 
 # 병합 테스트 (dry-run, 실제 변경 없음)
-node src/operator-audit.js merge <유지ID> <삭제ID>
+node src/matchers/operator-audit.js merge <유지ID> <삭제ID>
 
 # 병합 실행 (실제 삭제)
-node src/operator-audit.js merge <유지ID> <삭제ID> --execute
+node src/matchers/operator-audit.js merge <유지ID> <삭제ID> --execute
 ```
 
 **병합 시 자동 처리**:
