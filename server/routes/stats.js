@@ -129,4 +129,52 @@ router.get('/top-operators', asyncHandler(async (req, res) => {
   });
 }));
 
+// Top 운용사 (결성예정액 기준)
+router.get('/top-operators-by-amount', asyncHandler(async (req, res) => {
+  const { limit = 10, years = 3 } = req.query;
+  const sheets = await getSheetsClient();
+
+  const applications = await sheets.getAllRows('신청현황');
+  const operators = await sheets.getAllRows('운용사');
+  const projects = await sheets.getAllRows('출자사업');
+
+  const currentYear = new Date().getFullYear();
+  const startYear = currentYear - parseInt(years);
+
+  const projectYearMap = new Map(projects.map(p => [p['ID'], parseInt(p['연도']) || 0]));
+
+  const selectedApps = applications.filter(app => {
+    if (app['상태'] !== '선정') return false;
+    const projectYear = projectYearMap.get(app['출자사업ID']);
+    return projectYear >= startYear;
+  });
+
+  const operatorStats = new Map();
+  for (const app of selectedApps) {
+    const opId = app['운용사ID'];
+    if (!operatorStats.has(opId)) {
+      operatorStats.set(opId, { count: 0, totalAmount: 0 });
+    }
+    const stats = operatorStats.get(opId);
+    stats.count++;
+    stats.totalAmount += parseFloat(app['결성예정액']) || 0;
+  }
+
+  const operatorMap = new Map(operators.map(op => [op['ID'], op]));
+  const ranked = Array.from(operatorStats.entries())
+    .map(([opId, stats]) => ({
+      id: opId,
+      name: operatorMap.get(opId)?.['운용사명'] || opId,
+      selectedCount: stats.count,
+      totalAmount: stats.totalAmount
+    }))
+    .sort((a, b) => b.totalAmount - a.totalAmount)
+    .slice(0, parseInt(limit));
+
+  res.json({
+    data: ranked,
+    period: { startYear, endYear: currentYear }
+  });
+}));
+
 export default router;

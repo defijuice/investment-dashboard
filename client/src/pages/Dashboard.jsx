@@ -3,22 +3,28 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Building2, FileText, Users, TrendingUp, RefreshCw } from 'lucide-react';
-import { fetchDashboardStats, fetchTopOperators } from '../api/client';
+import { fetchDashboardStats, fetchTopOperators, fetchTopOperatorsByAmount } from '../api/client';
 
 const COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [years, setYears] = useState(3);
+  const [amountYears, setAmountYears] = useState(3);
+  const [countYears, setCountYears] = useState(3);
 
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery({
     queryKey: ['dashboardStats'],
     queryFn: () => fetchDashboardStats().then(res => res.data)
   });
 
+  const { data: topByAmount, isLoading: amountLoading, refetch: refetchAmount } = useQuery({
+    queryKey: ['topOperatorsByAmount', amountYears],
+    queryFn: () => fetchTopOperatorsByAmount(amountYears, 10).then(res => res.data)
+  });
+
   const { data: topOperators, isLoading: topLoading, refetch: refetchTop } = useQuery({
-    queryKey: ['topOperators', years],
-    queryFn: () => fetchTopOperators(years, 10).then(res => res.data)
+    queryKey: ['topOperators', countYears],
+    queryFn: () => fetchTopOperators(countYears, 10).then(res => res.data)
   });
 
   const handleRefresh = () => {
@@ -26,7 +32,7 @@ export default function Dashboard() {
     refetchTop();
   };
 
-  if (statsLoading || topLoading) {
+  if (statsLoading || amountLoading || topLoading) {
     return <div className="loading">로딩 중...</div>;
   }
 
@@ -104,16 +110,86 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Top Tier Ranking */}
+      {/* 출자 결성 규모 랭킹 */}
       <div className="card">
         <div className="card-header">
-          <h2>Top Tier 랭킹 (선정 횟수 기준)</h2>
+          <h2>출자 결성 규모 랭킹</h2>
           <div className="period-selector">
             {[1, 3, 5].map(y => (
               <button
                 key={y}
-                className={`period-btn ${years === y ? 'active' : ''}`}
-                onClick={() => setYears(y)}
+                className={`period-btn ${amountYears === y ? "active" : ""}`}
+                onClick={() => setAmountYears(y)}
+              >
+                {y}년
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="chart-container">
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart
+              data={topByAmount?.data || []}
+              layout="vertical"
+              margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
+            >
+              <XAxis type="number" />
+              <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12 }} />
+              <Tooltip
+                formatter={(value, name) => {
+                  if (name === 'totalAmount') return [`${value.toLocaleString()}억원`, '결성예정액'];
+                  if (name === 'selectedCount') return [`${value}건`, '선정 횟수'];
+                  return [value, name];
+                }}
+              />
+              <Bar dataKey="totalAmount" name="결성예정액" radius={[0, 4, 4, 0]}>
+                {(topByAmount?.data || []).map((entry, index) => (
+                  <Cell key={`cell-amount-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="ranking-table">
+          <table>
+            <thead>
+              <tr>
+                <th>순위</th>
+                <th>운용사명</th>
+                <th>결성예정액</th>
+                <th>선정 횟수</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(topByAmount?.data || []).map((op, idx) => (
+                <tr
+                  key={op.id}
+                  onClick={() => navigate(`/operators/${op.id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <td>{idx + 1}</td>
+                  <td>{op.name}</td>
+                  <td>{op.totalAmount?.toLocaleString()}억원</td>
+                  <td>{op.selectedCount}건</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 현재누적 선정 실적 랭킹 */}
+      <div className="card">
+        <div className="card-header">
+          <h2>현재누적 선정 실적 랭킹</h2>
+          <div className="period-selector">
+            {[1, 3, 5].map(y => (
+              <button
+                key={y}
+                className={`period-btn ${countYears === y ? 'active' : ''}`}
+                onClick={() => setCountYears(y)}
               >
                 {y}년
               </button>

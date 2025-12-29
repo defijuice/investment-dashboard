@@ -44,7 +44,7 @@ export default function Dashboard() {
     );
   }
 
-  const { summary, statusCounts, fileCounts, recentFiles } = dashboardData || {};
+  const { summary, statusCounts, fileCounts } = dashboardData || {};
 
   return (
     <div className="space-y-6">
@@ -103,65 +103,28 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top 운용사 */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold mb-4">
-            Top 운용사 (최근 {topOperators?.period?.startYear}~{topOperators?.period?.endYear})
-          </h3>
-          <div className="space-y-3">
-            {topOperators?.data?.slice(0, 5).map((op, index) => (
-              <div
-                key={op.id}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full text-sm font-medium">
-                    {index + 1}
-                  </span>
-                  <span className="font-medium">{op.name}</span>
-                </div>
-                <span className="text-sm text-gray-500">
-                  선정 {op.selectedCount}건
+      {/* Top 운용사 */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold mb-4">
+          Top 운용사 (최근 {topOperators?.period?.startYear}~{topOperators?.period?.endYear})
+        </h3>
+        <div className="space-y-3">
+          {topOperators?.data?.slice(0, 5).map((op, index) => (
+            <div
+              key={op.id}
+              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+            >
+              <div className="flex items-center gap-3">
+                <span className="w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full text-sm font-medium">
+                  {index + 1}
                 </span>
+                <span className="font-medium">{op.name}</span>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* 최근 처리 파일 */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold mb-4">최근 처리 파일</h3>
-          <div className="space-y-3">
-            {recentFiles?.length > 0 ? (
-              recentFiles.map((file) => (
-                <div
-                  key={file.ID}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{file['파일명']}</div>
-                    <div className="text-xs text-gray-500">
-                      {file['처리일시']}
-                    </div>
-                  </div>
-                  <span
-                    className={`px-2 py-1 text-xs rounded ${
-                      file['처리상태'] === '완료'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-yellow-100 text-yellow-700'
-                    }`}
-                  >
-                    {file['처리상태']}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div className="text-gray-500 text-center py-4">
-                처리된 파일이 없습니다.
-              </div>
-            )}
-          </div>
+              <span className="text-sm text-gray-500">
+                선정 {op.selectedCount}건
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

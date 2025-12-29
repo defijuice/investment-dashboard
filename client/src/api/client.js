@@ -45,6 +45,8 @@ export const clearApiKey = () => {
 export const fetchDashboardStats = () => client.get('/stats/dashboard');
 export const fetchTopOperators = (years = 3, limit = 10) =>
   client.get('/stats/top-operators', { params: { years, limit } });
+export const fetchTopOperatorsByAmount = (years = 3, limit = 10) =>
+  client.get('/stats/top-operators-by-amount', { params: { years, limit } });
 
 // Operators
 export const fetchOperators = (params) => client.get('/operators', { params });

@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Search, Settings, LogOut, Building2, Users, FolderOpen } from 'lucide-react';
+import { LayoutDashboard, Search, Settings, LogOut, Users, FolderOpen } from 'lucide-react';
 import { clearApiKey } from '../api/client';
 
 export default function Layout() {
@@ -22,8 +22,8 @@ export default function Layout() {
     <div className="layout">
       <nav className="sidebar">
         <div className="sidebar-header">
-          <Building2 size={24} />
-          <span>KVIC Dashboard</span>
+          <img src="/logo.png" alt="VC RANK" style={{ width: 24, height: 24 }} />
+          <span>VC RANK</span>
         </div>
 
         <ul className="nav-list">
