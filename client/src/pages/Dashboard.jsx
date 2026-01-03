@@ -2,15 +2,18 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Building2, FileText, Users, TrendingUp, RefreshCw } from 'lucide-react';
+import { Building2, FileText, Users, TrendingUp, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchDashboardStats, fetchTopOperators, fetchTopOperatorsByAmount } from '../api/client';
 
 const COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
+const ITEMS_PER_PAGE = 10;
+const MAX_PAGES = 20;
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [amountYears, setAmountYears] = useState(3);
   const [countYears, setCountYears] = useState(3);
+  const [countPage, setCountPage] = useState(1);
 
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery({
     queryKey: ['dashboardStats'],
@@ -24,7 +27,7 @@ export default function Dashboard() {
 
   const { data: topOperators, isLoading: topLoading, refetch: refetchTop } = useQuery({
     queryKey: ['topOperators', countYears],
-    queryFn: () => fetchTopOperators(countYears, 10).then(res => res.data)
+    queryFn: () => fetchTopOperators(countYears, ITEMS_PER_PAGE * MAX_PAGES).then(res => res.data)
   });
 
   const handleRefresh = () => {
@@ -189,37 +192,12 @@ export default function Dashboard() {
               <button
                 key={y}
                 className={`period-btn ${countYears === y ? 'active' : ''}`}
-                onClick={() => setCountYears(y)}
+                onClick={() => { setCountYears(y); setCountPage(1); }}
               >
                 {y}년
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="chart-container">
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart
-              data={topOperators?.data || []}
-              layout="vertical"
-              margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
-            >
-              <XAxis type="number" />
-              <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12 }} />
-              <Tooltip
-                formatter={(value, name) => {
-                  if (name === 'selectedCount') return [`${value}건`, '선정 횟수'];
-                  if (name === 'totalAmount') return [`${value}억원`, '결성예정액'];
-                  return [value, name];
-                }}
-              />
-              <Bar dataKey="selectedCount" name="선정 횟수" radius={[0, 4, 4, 0]}>
-                {(topOperators?.data || []).map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
         </div>
 
         <div className="ranking-table">
@@ -233,13 +211,15 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {(topOperators?.data || []).map((op, idx) => (
+              {(topOperators?.data || [])
+                .slice((countPage - 1) * ITEMS_PER_PAGE, countPage * ITEMS_PER_PAGE)
+                .map((op, idx) => (
                 <tr
                   key={op.id}
                   onClick={() => navigate(`/operators/${op.id}`)}
                   style={{ cursor: 'pointer' }}
                 >
-                  <td>{idx + 1}</td>
+                  <td>{(countPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
                   <td>{op.name}</td>
                   <td>{op.selectedCount}건</td>
                   <td>{op.totalAmount?.toLocaleString()}억원</td>
@@ -248,6 +228,32 @@ export default function Dashboard() {
             </tbody>
           </table>
         </div>
+
+        {/* 페이지네이션 */}
+        {(() => {
+          const totalItems = topOperators?.data?.length || 0;
+          const totalPages = Math.min(Math.ceil(totalItems / ITEMS_PER_PAGE), MAX_PAGES);
+          if (totalPages <= 1) return null;
+          return (
+            <div className="pagination">
+              <button
+                onClick={() => setCountPage(p => Math.max(1, p - 1))}
+                disabled={countPage === 1}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span style={{ margin: '0 1rem' }}>
+                {countPage} / {totalPages} 페이지
+              </span>
+              <button
+                onClick={() => setCountPage(p => Math.min(totalPages, p + 1))}
+                disabled={countPage === totalPages}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Recent Projects */}

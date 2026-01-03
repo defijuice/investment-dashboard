@@ -21,9 +21,28 @@ export default function Layout() {
   return (
     <div className="layout">
       <nav className="sidebar">
-        <div className="sidebar-header">
-          <img src="/logo.png" alt="VC RANK" style={{ width: 24, height: 24 }} />
-          <span>VC RANK</span>
+        <div className="sidebar-header" style={{
+          background: '#ffffff',
+          borderRadius: 8,
+          padding: '16px',
+          margin: '0 0 16px 0',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '12px',
+          width: '100%'
+        }}>
+          <img src="/logo.png" alt="VC RANK" style={{ width: 180, height: 180 }} />
+          <span
+            className="shimmer-text"
+            style={{
+              fontSize: '2.1rem',
+              fontWeight: 900,
+              fontFamily: "'Roboto', sans-serif",
+              letterSpacing: '0.1em'
+            }}
+          >VC RANK</span>
         </div>
 
         <ul className="nav-list">
