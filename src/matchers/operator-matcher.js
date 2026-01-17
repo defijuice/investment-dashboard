@@ -5,6 +5,8 @@
  * 중복 등록을 방지하고 사용자 확인을 요청
  */
 
+import { normalizeName } from '../utils/normalize.js';
+
 /**
  * 한글 자모 분해 (초성/중성/종성)
  */
@@ -127,17 +129,7 @@ function removeCompanySuffix(name) {
   return result;
 }
 
-/**
- * 이름 정규화 (비교용)
- */
-function normalizeName(name) {
-  return name
-    .toLowerCase()
-    .replace(/[()（）\[\]【】]/g, '')
-    .replace(/[,.\-_&]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+// normalizeName은 utils/normalize.js에서 import
 
 /**
  * 영문 약어 확장 패턴

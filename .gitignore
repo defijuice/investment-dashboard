@@ -9,6 +9,9 @@ processed.json
 # Verification reports
 reports/
 
+# Parse cache
+result/
+
 # Admin frontend
 admin/node_modules/
 admin/dist/

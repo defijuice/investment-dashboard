@@ -15,6 +15,7 @@ import { GoogleSheetsClient } from '../core/googleSheets.js';
 import { parsePdfWithPdfplumber } from '../processors/pdf-compare.js';
 import { calculateOperatorSimilarity } from '../matchers/operator-matcher.js';
 import { VerificationReporter } from '../workflows/verification-report.js';
+import { normalizeName } from './normalize.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -45,18 +46,7 @@ function parseArgs() {
   return options;
 }
 
-/**
- * 운용사명 정규화 (비교용)
- */
-function normalizeName(name) {
-  if (!name) return '';
-  return name
-    .toLowerCase()
-    .replace(/[()（）\[\]【】]/g, '')
-    .replace(/[,.\-_&]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+// normalizeName은 ./normalize.js에서 import
 
 /**
  * 파일번호로 PDF 파일 찾기

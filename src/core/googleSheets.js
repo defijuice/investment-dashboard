@@ -18,6 +18,51 @@ export class GoogleSheetsClient {
     this.spreadsheetId = options.spreadsheetId || process.env.GOOGLE_SPREADSHEET_ID;
     this.sheets = null;
     this.auth = null;
+
+    // 캐싱 레이어 (Phase 1.4)
+    this._cache = new Map();           // 시트별 캐시
+    this._cacheTimestamp = new Map();  // 캐시 시간
+    this._cacheTTL = 5 * 60 * 1000;    // 5분 TTL
+  }
+
+  /**
+   * 캐시된 getAllRows - 같은 세션 내 중복 호출 방지
+   * @param {string} sheetName - 시트 이름
+   * @returns {Promise<Array>} - 행 배열
+   */
+  async getAllRowsCached(sheetName) {
+    const now = Date.now();
+    const cached = this._cache.get(sheetName);
+    const timestamp = this._cacheTimestamp.get(sheetName);
+
+    // 캐시 유효 시 반환
+    if (cached && timestamp && (now - timestamp) < this._cacheTTL) {
+      return cached;
+    }
+
+    // 캐시 없거나 만료 시 조회
+    const rows = await this.getAllRows(sheetName);
+    this._cache.set(sheetName, rows);
+    this._cacheTimestamp.set(sheetName, now);
+
+    return rows;
+  }
+
+  /**
+   * 캐시 무효화 (쓰기 작업 후)
+   * @param {string} sheetName - 시트 이름
+   */
+  invalidateCache(sheetName) {
+    this._cache.delete(sheetName);
+    this._cacheTimestamp.delete(sheetName);
+  }
+
+  /**
+   * 전체 캐시 클리어
+   */
+  clearCache() {
+    this._cache.clear();
+    this._cacheTimestamp.clear();
   }
 
   async init() {
@@ -212,6 +257,9 @@ export class GoogleSheetsClient {
       insertDataOption: 'INSERT_ROWS',
       requestBody: { values: rows }
     });
+
+    // 캐시 무효화
+    this.invalidateCache(sheetName);
   }
 
   async updateRow(sheetName, rowIndex, values) {
@@ -429,6 +477,46 @@ export class GoogleSheetsClient {
         await this.setValues(`운용사!C${row._rowIndex}`, [[alias]]);
         console.log(`  [약어 저장] ${operatorId}: ${alias}`);
       }
+    }
+  }
+
+  /**
+   * 약어 일괄 업데이트 (배치)
+   * @param {Array} aliasUpdates - [{ operatorId, alias, fullName }, ...]
+   */
+  async updateOperatorAliasesBatch(aliasUpdates) {
+    if (aliasUpdates.length === 0) return;
+
+    // 운용사 전체 로드 (캐시 사용)
+    const operators = await this.getAllRowsCached('운용사');
+    const operatorMap = new Map(operators.map(op => [op['ID'], op]));
+
+    // 업데이트할 데이터 준비
+    const updates = [];
+    for (const { operatorId, alias } of aliasUpdates) {
+      const op = operatorMap.get(operatorId);
+      if (!op) continue;
+
+      const existingAlias = op['약어'] || '';
+      const aliases = existingAlias ? existingAlias.split(',').map(a => a.trim()) : [];
+
+      if (!aliases.includes(alias)) {
+        aliases.push(alias);
+        updates.push({
+          rowIndex: op._rowIndex,
+          newAlias: aliases.join(', ')
+        });
+      }
+    }
+
+    // 일괄 업데이트
+    for (const { rowIndex, newAlias } of updates) {
+      await this.setValues(`운용사!C${rowIndex}`, [[newAlias]]);
+    }
+
+    if (updates.length > 0) {
+      console.log(`  [약어 배치 업데이트] ${updates.length}건`);
+      this.invalidateCache('운용사');
     }
   }
 
@@ -675,9 +763,61 @@ export class GoogleSheetsClient {
   async updateApplicationStatus(appId, status) {
     const row = await this.findById('신청현황', appId);
     if (row && row._rowIndex) {
-      // 상태는 I열 (9번째)
-      await this.setValues(`신청현황!I${row._rowIndex}`, [[status]]);
+      // 상태는 J열 (10번째)
+      await this.setValues(`신청현황!J${row._rowIndex}`, [[status]]);
     }
+  }
+
+  /**
+   * 신청현황 상태 일괄 업데이트 (Phase 2.2)
+   * @param {Array} updates - [{ id: 'AP0001', status: '탈락' }, ...]
+   */
+  async updateApplicationStatusBatch(updates) {
+    if (updates.length === 0) return;
+
+    const rows = await this.getAllRowsCached('신청현황');
+    const rowMap = new Map(rows.map(r => [r['ID'], r]));
+
+    for (const { id, status } of updates) {
+      const row = rowMap.get(id);
+      if (row) {
+        // 상태는 J열 (10번째)
+        await this.setValues(`신청현황!J${row._rowIndex}`, [[status]]);
+      }
+    }
+
+    if (updates.length > 0) {
+      console.log(`  [상태 배치 업데이트] ${updates.length}건`);
+      this.invalidateCache('신청현황');
+    }
+  }
+
+  /**
+   * 탈락 상태 업데이트 - 선정되지 않은 접수 상태를 탈락으로 변경 (Phase 2.2)
+   * @param {string} projectId - 출자사업 ID
+   * @param {Set<string>} selectedOperatorIds - 선정된 운용사 ID Set
+   * @returns {number} - 업데이트된 건수
+   */
+  async updateRejectedStatus(projectId, selectedOperatorIds) {
+    // 해당 출자사업의 모든 신청현황 조회
+    const allApplications = await this.getAllRowsCached('신청현황');
+    const projectApps = allApplications.filter(app => app['출자사업ID'] === projectId);
+
+    // "접수" 상태이고 선정 명단에 없으면 → "탈락"
+    const updateTargets = projectApps.filter(app =>
+      app['상태'] === '접수' && !selectedOperatorIds.has(app['운용사ID'])
+    );
+
+    if (updateTargets.length > 0) {
+      console.log(`\n탈락 처리: ${updateTargets.length}건`);
+
+      // 배치 업데이트
+      await this.updateApplicationStatusBatch(
+        updateTargets.map(app => ({ id: app['ID'], status: '탈락' }))
+      );
+    }
+
+    return updateTargets.length;
   }
 
   // ========== 출자사업 현황 관리 ==========

@@ -239,10 +239,41 @@ def summarize_by_category(processed):
     return summary
 
 
+def parse_amount(text):
+    """금액 문자열을 숫자로 파싱 (억원/M 단위)"""
+    if not text:
+        return None
+
+    # 쉼표 제거, 공백 정리
+    cleaned = text.replace(',', '').replace(' ', '').strip()
+
+    # 숫자만 추출 (소수점 포함)
+    match = re.search(r'[\d.]+', cleaned)
+    if match:
+        try:
+            return float(match.group())
+        except:
+            return None
+    return None
+
+
+def detect_currency(cells):
+    """통화 단위 감지"""
+    text = ' '.join(str(c) for c in cells if c)
+
+    # USD 감지
+    if 'USD' in text or '$' in text or '백만불' in text or '백만달러' in text:
+        return 'USD(M)'
+
+    # 기본값: 억원
+    return '억원'
+
+
 def parse_selection_pdf(pdf_path):
-    """선정결과 PDF 파싱"""
+    """선정결과 PDF 파싱 - 금액 컬럼 추출 강화"""
     selected = []
     current_category = None
+    detected_currency = '억원'
 
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
@@ -259,6 +290,10 @@ def parse_selection_pdf(pdf_path):
                 })
 
             for table in tables:
+                # 첫 번째 테이블에서 통화 단위 감지
+                if table and len(table) > 0:
+                    detected_currency = detect_currency(table[0])
+
                 for row in table:
                     if not row:
                         continue
@@ -276,7 +311,7 @@ def parse_selection_pdf(pdf_path):
                         continue
 
                     # 헤더 행 건너뛰기
-                    if any(header in str(cells) for header in ['운용사', '결성예정', '출자요청', '모태출자', '선정결과']):
+                    if any(header in str(cells) for header in ['운용사', '결성예정', '출자요청', '모태출자', '선정결과', '최소결성']):
                         continue
 
                     # 합계 행 건너뛰기
@@ -291,43 +326,107 @@ def parse_selection_pdf(pdf_path):
 
                     # 회사명 추출 (보통 마지막 또는 두 번째 컬럼)
                     company_cell = None
+                    company_idx = -1
                     for i, cell in enumerate(cells):
                         if cell and not re.match(r'^[\d,.\s%]+$', cell) and len(cell) > 2:
                             # 숫자가 아니고 길이가 2 이상인 셀
                             if '인베스트' in cell or '벤처' in cell or '파트너' in cell or '캐피탈' in cell:
                                 company_cell = cell
+                                company_idx = i
                                 break
 
                     if not company_cell:
                         # 마지막 비어있지 않은 셀
-                        for cell in reversed(cells):
+                        for i, cell in enumerate(reversed(cells)):
                             if cell and not re.match(r'^[\d,.\s%]+$', cell):
                                 company_cell = cell
+                                company_idx = len(cells) - 1 - i
                                 break
 
                     if not company_cell or company_cell in ['-', '']:
                         continue
 
-                    # 금액 추출 (숫자 셀들)
+                    # 금액 추출 (숫자 셀들) - 순서대로 추출
+                    # 일반적인 순서: 최소결성규모, 모태출자액, 결성예정액, 출자요청액
                     amounts = []
-                    for cell in cells:
-                        if cell and re.match(r'^[\d,]+$', cell.replace(',', '')):
-                            try:
-                                amounts.append(float(cell.replace(',', '')))
-                            except:
-                                pass
+                    for i, cell in enumerate(cells):
+                        if i == company_idx:
+                            continue  # 회사명 컬럼 제외
+                        if cell:
+                            amount = parse_amount(cell)
+                            if amount is not None:
+                                amounts.append(amount)
+
+                    # 금액 필드 매핑
+                    # 컬럼 수에 따라 다르게 처리
+                    min_formation = None
+                    mo_tae = None
+                    fund_size = None
+                    request_amount = None
+
+                    if len(amounts) >= 4:
+                        min_formation = amounts[0]
+                        mo_tae = amounts[1]
+                        fund_size = amounts[2]
+                        request_amount = amounts[3]
+                    elif len(amounts) == 3:
+                        # 최소결성규모가 없는 경우가 많음
+                        mo_tae = amounts[0]
+                        fund_size = amounts[1]
+                        request_amount = amounts[2]
+                    elif len(amounts) == 2:
+                        # 모태출자액, 결성예정액만
+                        mo_tae = amounts[0]
+                        fund_size = amounts[1]
+                    elif len(amounts) == 1:
+                        # 모태출자액만
+                        mo_tae = amounts[0]
 
                     selected.append({
                         'company': company_cell,
                         'category': current_category,
-                        'amount_planned': amounts[0] if len(amounts) > 0 else None,
-                        'amount_requested': amounts[1] if len(amounts) > 1 else None,
+                        'min_formation': min_formation,
+                        'mo_tae': mo_tae,
+                        'fund_size': fund_size,
+                        'request_amount': request_amount,
+                        'currency': detected_currency,
+                        # 하위 호환성
+                        'amount_planned': fund_size,
+                        'amount_requested': request_amount,
                     })
 
     # 공동GP 분리
-    processed = process_applications([{'company': s['company'], 'category': s['category'],
-                                       'amount_planned': s['amount_planned'],
-                                       'amount_requested': s['amount_requested']} for s in selected])
+    processed = []
+    for s in selected:
+        companies = split_joint_gp(s['company'])
+        is_joint_gp = len(companies) > 1
+        gp_count = len(companies)
+
+        for company in companies:
+            entry = {
+                'company': company,
+                'category': s['category'],
+                'min_formation': s['min_formation'] / gp_count if s['min_formation'] and is_joint_gp else s['min_formation'],
+                'mo_tae': s['mo_tae'] / gp_count if s['mo_tae'] and is_joint_gp else s['mo_tae'],
+                'fund_size': s['fund_size'] / gp_count if s['fund_size'] and is_joint_gp else s['fund_size'],
+                'request_amount': s['request_amount'] / gp_count if s['request_amount'] and is_joint_gp else s['request_amount'],
+                'currency': s['currency'],
+                'is_joint_gp': is_joint_gp,
+                'original_company': s['company'] if is_joint_gp else None,
+                'joint_gp_count': gp_count if is_joint_gp else None,
+                # 하위 호환성
+                'amount_planned': s['fund_size'] / gp_count if s['fund_size'] and is_joint_gp else s['fund_size'],
+                'amount_requested': s['request_amount'] / gp_count if s['request_amount'] and is_joint_gp else s['request_amount'],
+            }
+
+            # 원본 금액 보존 (N빵 전)
+            if is_joint_gp:
+                entry['original_min_formation'] = s['min_formation']
+                entry['original_mo_tae'] = s['mo_tae']
+                entry['original_fund_size'] = s['fund_size']
+                entry['original_request_amount'] = s['request_amount']
+
+            processed.append(entry)
 
     return processed
 
@@ -366,9 +465,19 @@ def main():
         # 선정결과 PDF 파싱
         processed = parse_selection_pdf(pdf_path)
 
+        # 통화 정보 수집
+        currencies = set(p.get('currency', '억원') for p in processed)
+        has_usd = 'USD(M)' in currencies
+
+        # 공동GP 통계
+        joint_gp_count = sum(1 for p in processed if p.get('is_joint_gp'))
+
         output = {
             'type': 'selection',
             'total_operators': len(processed),
+            'joint_gp_count': joint_gp_count,
+            'has_usd': has_usd,
+            'currencies': list(currencies),
             'applications': processed
         }
 

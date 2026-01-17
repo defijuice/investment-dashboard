@@ -165,8 +165,8 @@ export default function OperatorDetail() {
               <div key={gp.name} className="gp-card">
                 <h4>{gp.name}</h4>
                 <div className="gp-stats">
-                  <span className="gp-count">{gp.value}건</span>
-                  <span className="gp-rate">{gp.winRate}%</span>
+                  <span className="gp-count">{gp.value}건 지원</span>
+                  <span className="gp-rate">선정률 {gp.winRate}%</span>
                 </div>
               </div>
             ))}
@@ -256,7 +256,12 @@ export default function OperatorDetail() {
               <div className="year-apps">
                 {year.applications.map((app, idx) => (
                   <div key={idx} className={`app-item ${app['상태']}`}>
-                    <span className="app-project">{app.projectName}</span>
+                    <span
+                      className="app-project link-cell"
+                      onClick={() => navigate(`/projects/${app.projectId}`)}
+                    >
+                      {app.projectName}
+                    </span>
                     <span className="app-category">{app['출자분야']}</span>
                     <span className={`app-status ${app['상태']}`}>{app['상태']}</span>
                     {app['비고']?.includes('공동GP') && (

@@ -7,6 +7,7 @@
 
 import Table from 'cli-table3';
 import readline from 'readline';
+import { normalizeName } from '../utils/normalize.js';
 
 /**
  * 검토 세션 클래스
@@ -472,14 +473,4 @@ export function prepareReviewData({
   };
 }
 
-/**
- * 운용사명 정규화 (비교용)
- */
-function normalizeName(name) {
-  return name
-    .toLowerCase()
-    .replace(/[,.\-()]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/\b(llc|inc|ltd|pte|limited|management|company|co)\b/gi, '')
-    .trim();
-}
+// normalizeName은 utils/normalize.js에서 import
