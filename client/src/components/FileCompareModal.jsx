@@ -70,7 +70,7 @@ export default function FileCompareModal({ fileId, fileType, projectId, onClose 
     setEditData({
       운용사명: app['운용사명'],
       출자분야: app['출자분야'],
-      결성예정액: app['결성예정액'],
+      최소결성규모: app['최소결성규모'],
       모태출자액: app['모태출자액'],
       상태: app['상태'],
       비고: app['비고']
@@ -82,7 +82,7 @@ export default function FileCompareModal({ fileId, fileType, projectId, onClose 
       id,
       data: {
         출자분야: editData.출자분야,
-        결성예정액: editData.결성예정액,
+        최소결성규모: editData.최소결성규모,
         모태출자액: editData.모태출자액,
         상태: editData.상태,
         비고: editData.비고
@@ -126,6 +126,24 @@ export default function FileCompareModal({ fileId, fileType, projectId, onClose 
   };
 
   const embedUrl = getEmbedUrl(pdfUrl);
+
+  // 공동GP 판단 함수
+  const isJointGP = (app) => {
+    const note = app['비고'] || '';
+    return note.match(/^AP\d+$/) !== null || app['상태'] === '공동GP';
+  };
+
+  // 공동GP 파트너 ID 추출
+  const getGPPartner = (app) => {
+    const note = app['비고'] || '';
+    const match = note.match(/^AP\d+$/);
+    return match ? match[0] : null;
+  };
+
+  // 실제 표시할 상태 (공동GP → 접수로 변환)
+  const getDisplayStatus = (status) => {
+    return status === '공동GP' ? '접수' : status;
+  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -220,86 +238,102 @@ export default function FileCompareModal({ fileId, fileType, projectId, onClose 
                   <tr>
                     <th>운용사</th>
                     <th>출자분야</th>
-                    <th>결성액</th>
+                    <th>최소결성규모(억 원)</th>
+                    <th>모태출자액(억 원)</th>
                     <th>상태</th>
-                    <th>비고</th>
+                    <th>공동GP</th>
                     <th>수정</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {applications.map(app => (
-                    <tr key={app['ID']} className={`status-row-${app['상태']}`}>
-                      {editingId === app['ID'] ? (
-                        <>
-                          <td>{app['운용사명']}</td>
-                          <td>
-                            <input
-                              type="text"
-                              value={editData.출자분야 || ''}
-                              onChange={e => setEditData({ ...editData, 출자분야: e.target.value })}
-                              className="edit-input"
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              value={editData.결성예정액 || ''}
-                              onChange={e => setEditData({ ...editData, 결성예정액: e.target.value })}
-                              className="edit-input small"
-                            />
-                          </td>
-                          <td>
-                            <select
-                              value={editData.상태 || ''}
-                              onChange={e => setEditData({ ...editData, 상태: e.target.value })}
-                              className="edit-select"
-                            >
-                              <option value="접수">접수</option>
-                              <option value="선정">선정</option>
-                              <option value="탈락">탈락</option>
-                            </select>
-                          </td>
-                          <td>
-                            <input
-                              type="text"
-                              value={editData.비고 || ''}
-                              onChange={e => setEditData({ ...editData, 비고: e.target.value })}
-                              className="edit-input"
-                            />
-                          </td>
-                          <td className="action-cell">
-                            <button
-                              className="btn-icon save"
-                              onClick={() => handleSave(app['ID'])}
-                              disabled={updateMutation.isPending}
-                            >
-                              <Save size={14} />
-                            </button>
-                            <button className="btn-icon cancel" onClick={handleCancel}>
-                              <X size={14} />
-                            </button>
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td>{app['운용사명']}</td>
-                          <td>{app['출자분야']}</td>
-                          <td>{app['결성예정액'] || '-'}</td>
-                          <td>
-                            <span className={`status-badge ${app['상태']}`}>
-                              {app['상태']}
-                            </span>
-                          </td>
-                          <td className="note-cell">{app['비고'] || '-'}</td>
-                          <td className="action-cell">
-                            <button className="btn-icon edit" onClick={() => handleEdit(app)}>
-                              <Edit3 size={14} />
-                            </button>
-                          </td>
-                        </>
-                      )}
-                    </tr>
-                  ))}
+                  {applications.map(app => {
+                    const displayStatus = getDisplayStatus(app['상태']);
+                    const jointGP = isJointGP(app);
+                    const gpPartner = getGPPartner(app);
+
+                    return (
+                      <tr key={app['ID']} className={`status-row-${displayStatus}`}>
+                        {editingId === app['ID'] ? (
+                          <>
+                            <td>{app['운용사명']}</td>
+                            <td>
+                              <input
+                                type="text"
+                                value={editData.출자분야 || ''}
+                                onChange={e => setEditData({ ...editData, 출자분야: e.target.value })}
+                                className="edit-input"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                value={editData.최소결성규모 || ''}
+                                onChange={e => setEditData({ ...editData, 최소결성규모: e.target.value })}
+                                className="edit-input small"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                value={editData.모태출자액 || ''}
+                                onChange={e => setEditData({ ...editData, 모태출자액: e.target.value })}
+                                className="edit-input small"
+                              />
+                            </td>
+                            <td>
+                              <select
+                                value={editData.상태 || ''}
+                                onChange={e => setEditData({ ...editData, 상태: e.target.value })}
+                                className="edit-select"
+                              >
+                                <option value="접수">접수</option>
+                                <option value="선정">선정</option>
+                                <option value="탈락">탈락</option>
+                              </select>
+                            </td>
+                            <td>-</td>
+                            <td className="action-cell">
+                              <button
+                                className="btn-icon save"
+                                onClick={() => handleSave(app['ID'])}
+                                disabled={updateMutation.isPending}
+                              >
+                                <Save size={14} />
+                              </button>
+                              <button className="btn-icon cancel" onClick={handleCancel}>
+                                <X size={14} />
+                              </button>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td>{app['운용사명']}</td>
+                            <td>{app['출자분야']}</td>
+                            <td>{app['최소결성규모'] || '-'}</td>
+                            <td>{app['모태출자액'] || '-'}</td>
+                            <td>
+                              <span className={`status-badge ${displayStatus}`}>
+                                {displayStatus}
+                              </span>
+                            </td>
+                            <td>
+                              {jointGP ? (
+                                <span className="gp-badge">
+                                  공동GP
+                                  {gpPartner && <small>({gpPartner})</small>}
+                                </span>
+                              ) : '-'}
+                            </td>
+                            <td className="action-cell">
+                              <button className="btn-icon edit" onClick={() => handleEdit(app)}>
+                                <Edit3 size={14} />
+                              </button>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {applications.length === 0 && (

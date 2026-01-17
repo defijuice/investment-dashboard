@@ -140,9 +140,10 @@ router.get('/:id/profile', asyncHandler(async (req, res) => {
   const selectedApps = operatorApps.filter(app => app['상태'] === '선정');
   const rejectedApps = operatorApps.filter(app => app['상태'] === '탈락');
 
-  // AUM 추정 (선정된 결성예정액 합계)
+  // AUM 추정 (선정된 결성예정액 합계, 없으면 최소결성규모 사용)
   const estimatedAUM = selectedApps.reduce((sum, app) => {
-    return sum + (parseFloat(app['결성예정액']) || 0);
+    const amount = parseFloat(app['결성예정액']) || parseFloat(app['최소결성규모']) || 0;
+    return sum + amount;
   }, 0);
 
   // 공동GP 참여 여부 확인
@@ -207,6 +208,7 @@ router.get('/:id/timeline', asyncHandler(async (req, res) => {
       출자분야: app['출자분야'],
       상태: app['상태'],
       결성예정액: app['결성예정액'],
+      최소결성규모: app['최소결성규모'],
       비고: app['비고']
     });
 

@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Search, Settings, LogOut, Users, FolderOpen } from 'lucide-react';
+import { LayoutDashboard, Search, Settings, LogOut, Users, FolderOpen, Info } from 'lucide-react';
 import { clearApiKey } from '../api/client';
 
 export default function Layout() {
@@ -15,6 +15,7 @@ export default function Layout() {
     { to: '/operators', icon: Users, label: '운용사' },
     { to: '/projects', icon: FolderOpen, label: '출자사업' },
     { to: '/search', icon: Search, label: '검색/필터' },
+    { to: '/about', icon: Info, label: 'About Us' },
     { to: '/admin', icon: Settings, label: '관리자' }
   ];
 

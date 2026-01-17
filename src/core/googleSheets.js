@@ -803,9 +803,10 @@ export class GoogleSheetsClient {
     const allApplications = await this.getAllRowsCached('신청현황');
     const projectApps = allApplications.filter(app => app['출자사업ID'] === projectId);
 
-    // "접수" 상태이고 선정 명단에 없으면 → "탈락"
+    // 선정/탈락이 아닌 상태이고 선정 명단에 없으면 → "탈락"
+    // (접수, 공동GP, 대기 등 모든 미확정 상태 포함)
     const updateTargets = projectApps.filter(app =>
-      app['상태'] === '접수' && !selectedOperatorIds.has(app['운용사ID'])
+      !['선정', '탈락'].includes(app['상태']) && !selectedOperatorIds.has(app['운용사ID'])
     );
 
     if (updateTargets.length > 0) {

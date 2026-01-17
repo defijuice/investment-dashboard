@@ -33,15 +33,80 @@ dotenv.config({ override: true });
 
 const anthropic = new Anthropic();
 
-// ============ 헬퍼 함수 ============
+// ============ 환율 변환 ============
 
 /**
- * 통화 코드를 한글 단위로 변환
+ * 기본 환율 (파일 등록일 기준으로 WebSearch 조회 후 업데이트 권장)
+ * 2024년 7월 기준 환율
  */
-function formatCurrency(currency) {
-  if (!currency) return '';
-  return currency === 'KRW' ? '억원' : `${currency} M`;
+const DEFAULT_EXCHANGE_RATES = {
+  'USD': 1380,   // 원/달러
+  'JPY': 8.6,    // 원/엔 (1엔당)
+  'GBP': 1750,   // 원/파운드
+  'EUR': 1500,   // 원/유로
+};
+
+/**
+ * 외화 금액을 억원으로 환산
+ * @param {number} amount - M(백만) 단위 금액
+ * @param {string} currency - 통화 코드 (USD(M), JPY(M), GBP(M), EUR(M), 억원)
+ * @param {object} rates - 환율 객체 (optional)
+ * @returns {number} 억원 단위 금액
+ */
+function convertToKRW(amount, currency, rates = DEFAULT_EXCHANGE_RATES) {
+  if (!amount || currency === '억원') return amount;
+
+  // 통화 코드 추출: "USD(M)" → "USD"
+  const currencyCode = currency.replace('(M)', '').trim();
+  const rate = rates[currencyCode];
+
+  if (!rate) {
+    console.warn(`  ⚠️ 알 수 없는 통화: ${currency}, 원본값 유지`);
+    return amount;
+  }
+
+  // M(백만) 단위 → 억원 변환
+  // USD M × 환율 / 100 = 억원
+  // JPY M × 환율 / 100 = 억원
+  const krwAmount = Math.round(amount * rate / 100);
+  return krwAmount;
 }
+
+/**
+ * 선정결과 데이터의 금액을 원화로 환산
+ * @param {Array} selected - 선정된 운용사 배열
+ * @param {object} rates - 환율 객체 (optional)
+ * @returns {Array} 원화 환산된 운용사 배열
+ */
+function convertSelectedToKRW(selected, rates = DEFAULT_EXCHANGE_RATES) {
+  return selected.map(item => {
+    const currency = item.currency || '억원';
+
+    if (currency === '억원') {
+      return item; // 이미 원화
+    }
+
+    const converted = {
+      ...item,
+      originalCurrency: currency,
+      originalMinFormation: item.minFormation,
+      originalMoTae: item.moTae,
+      originalFundSize: item.fundSize,
+      originalRequestAmount: item.requestAmount,
+      minFormation: convertToKRW(item.minFormation, currency, rates),
+      moTae: convertToKRW(item.moTae, currency, rates),
+      fundSize: convertToKRW(item.fundSize, currency, rates),
+      requestAmount: convertToKRW(item.requestAmount, currency, rates),
+      currency: '억원',
+    };
+
+    console.log(`    ${item.name}: ${currency} ${item.minFormation || '-'}/${item.requestAmount || '-'}M → ${converted.minFormation || '-'}/${converted.requestAmount || '-'}억원`);
+
+    return converted;
+  });
+}
+
+// ============ 헬퍼 함수 ============
 
 /**
  * 터미널 입력 받기
@@ -85,24 +150,30 @@ async function parseSelectionPdfWithAI(text, filename) {
 추출할 정보:
 1. 운용사명 (회사명, GP명)
 2. 출자분야/카테고리 (있는 경우)
-3. 결성예정액 또는 최소결성규모 (숫자만)
-4. 출자요청액 또는 모태출자액 (숫자만)
-5. 통화단위 (억원, USD M, EUR M 등)
+3. 최소결성규모 (숫자, 억원/M 단위)
+4. 모태출자액 (숫자, 억원/M 단위)
+5. 결성예정액 (숫자, 억원/M 단위)
+6. 출자요청액 (숫자, 억원/M 단위)
+7. 통화단위 (억원 또는 USD(M))
 
 주의사항:
 - 공동GP인 경우 (예: "A / B" 또는 "A, B") 각각 별도 항목으로 분리
+- 공동GP의 금액은 각 운용사에 동일하게 입력 (분할하지 않음)
 - 합계, 소계 등은 제외
 - 숫자가 없는 운용사명만 나열된 경우도 추출 (금액은 null)
 - 해외 운용사는 영문명 그대로 유지
+- 금액은 숫자만 추출 (단위 제외)
 
 JSON 배열로 응답해주세요:
 [
   {
     "name": "운용사명",
     "category": "출자분야 (없으면 빈 문자열)",
-    "minSize": 결성예정액/최소결성규모 (숫자 또는 null),
-    "investAmount": 출자요청액/모태출자액 (숫자 또는 null),
-    "currency": "KRW" 또는 "USD" 또는 "EUR" (억원이면 KRW)
+    "minFormation": 최소결성규모 (숫자 또는 null),
+    "moTae": 모태출자액 (숫자 또는 null),
+    "fundSize": 결성예정액 (숫자 또는 null),
+    "requestAmount": 출자요청액 (숫자 또는 null),
+    "currency": "억원" 또는 "USD(M)"
   }
 ]
 
@@ -129,10 +200,12 @@ ${text}`;
     const selected = parsed.map(item => ({
       name: item.name?.trim() || '',
       category: item.category?.trim() || '',
-      region: item.currency === 'KRW' ? '한국' : '',
-      currency: item.currency || 'KRW',
-      minSize: item.minSize || null,
-      investAmount: item.investAmount || null,
+      region: item.currency === '억원' ? '한국' : '',
+      currency: item.currency || '억원',
+      minFormation: item.minFormation || null,
+      moTae: item.moTae || null,
+      fundSize: item.fundSize || null,
+      requestAmount: item.requestAmount || null,
     })).filter(item => item.name);
 
     console.log(`  [AI 파싱] ${selected.length}개 운용사 추출`);
@@ -399,10 +472,18 @@ async function processPair(applicationFileNo, selectionFileNo) {
   const { applicants } = await parseApplicationPdf(applicationText, applicationFile);
 
   console.log('  - 선정결과 파싱 중...');
-  const { selected } = await parseSelectionPdfWithAI(selectionText, selectionFile);
+  const { selected: rawSelected } = await parseSelectionPdfWithAI(selectionText, selectionFile);
 
-  // 국내/해외 판별
-  const isDomestic = selected.length > 0 && selected[0].currency === 'KRW';
+  // 외화 금액 원화 환산
+  const hasForeignCurrency = rawSelected.some(s => s.currency && s.currency !== '억원');
+  let selected = rawSelected;
+  if (hasForeignCurrency) {
+    console.log('  - 외화 금액 원화 환산 중...');
+    selected = convertSelectedToKRW(rawSelected);
+  }
+
+  // 국내/해외 판별 (원본 통화 기준)
+  const isDomestic = rawSelected.length > 0 && rawSelected[0].currency === '억원';
 
   // 사업명 추출
   let projectName = '';
@@ -817,20 +898,19 @@ async function processPair(applicationFileNo, selectionFileNo) {
         newAliases.push({ operatorId, alias: mapping.originalName, fullName: mapping.name });
       }
 
-      const currency = selectionData?.currency
-        ? formatCurrency(selectionData.currency)
-        : '';
-
+      // 선정 상태일 때만 금액 저장 (접수/탈락은 개별 금액이 없으므로 비워둠)
       applicationDataList.push({
         출자사업ID: project.id,
         운용사ID: operatorId,
         출자분야: applicant.category,
-        결성예정액: selectionData?.minSize || '',
-        출자요청액: selectionData?.investAmount || '',
-        최소결성규모: '',
-        통화단위: currency,
+        최소결성규모: isSelected ? (selectionData?.minFormation || '') : '',
+        모태출자액: isSelected ? (selectionData?.moTae || '') : '',
+        결성예정액: isSelected ? (selectionData?.fundSize || '') : '',
+        출자요청액: isSelected ? (selectionData?.requestAmount || '') : '',
+        통화단위: isSelected ? (selectionData?.currency || '') : '',
         상태: applicant.status,
-        비고: ''
+        비고: applicant.isJointGP ? '공동GP' : '',
+        공동GP파트너: applicant.jointGPPartner || ''
       });
 
       if (isSelected) {
@@ -875,18 +955,17 @@ async function processPair(applicationFileNo, selectionFileNo) {
         continue;
       }
 
-      const currency = formatCurrency(s.currency);
-
       applicationDataList.push({
         출자사업ID: project.id,
         운용사ID: operatorId,
         출자분야: s.category,
-        결성예정액: s.minSize || '',
-        출자요청액: s.investAmount || '',
-        최소결성규모: '',
-        통화단위: currency,
+        최소결성규모: s.minFormation || '',
+        모태출자액: s.moTae || '',
+        결성예정액: s.fundSize || '',
+        출자요청액: s.requestAmount || '',
+        통화단위: s.currency || '',
         상태: '선정',
-        비고: ''
+        비고: s.isJointGP ? '공동GP' : ''
       });
 
       stats.newSelected++;

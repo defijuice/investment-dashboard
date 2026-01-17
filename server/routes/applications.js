@@ -161,7 +161,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
 
   const rowIndex = existing._rowIndex;
 
-  // 열 순서: A:ID, B:출자사업ID, C:운용사ID, D:출자분야, E:결성예정액, F:출자요청액, G:최소결성규모, H:통화단위, I:상태, J:비고
+  // 열 순서: A:ID, B:출자사업ID, C:운용사ID, D:출자분야, E:최소결성규모, F:모태출자액, G:결성예정액, H:출자요청액, I:통화단위, J:상태, K:비고
   if (출자사업ID !== undefined) {
     await sheets.setValues(`신청현황!B${rowIndex}`, [[출자사업ID]]);
   }
@@ -171,23 +171,23 @@ router.put('/:id', asyncHandler(async (req, res) => {
   if (출자분야 !== undefined) {
     await sheets.setValues(`신청현황!D${rowIndex}`, [[출자분야]]);
   }
+  if (최소결성규모 !== undefined) {
+    await sheets.setValues(`신청현황!E${rowIndex}`, [[최소결성규모]]);
+  }
   if (결성예정액 !== undefined) {
-    await sheets.setValues(`신청현황!E${rowIndex}`, [[결성예정액]]);
+    await sheets.setValues(`신청현황!G${rowIndex}`, [[결성예정액]]);
   }
   if (출자요청액 !== undefined) {
-    await sheets.setValues(`신청현황!F${rowIndex}`, [[출자요청액]]);
-  }
-  if (최소결성규모 !== undefined) {
-    await sheets.setValues(`신청현황!G${rowIndex}`, [[최소결성규모]]);
+    await sheets.setValues(`신청현황!H${rowIndex}`, [[출자요청액]]);
   }
   if (통화단위 !== undefined) {
-    await sheets.setValues(`신청현황!H${rowIndex}`, [[통화단위]]);
+    await sheets.setValues(`신청현황!I${rowIndex}`, [[통화단위]]);
   }
   if (상태 !== undefined) {
-    await sheets.setValues(`신청현황!I${rowIndex}`, [[상태]]);
+    await sheets.setValues(`신청현황!J${rowIndex}`, [[상태]]);
   }
   if (비고 !== undefined) {
-    await sheets.setValues(`신청현황!J${rowIndex}`, [[비고]]);
+    await sheets.setValues(`신청현황!K${rowIndex}`, [[비고]]);
   }
 
   const updated = await sheets.findById('신청현황', id);

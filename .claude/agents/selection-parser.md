@@ -142,12 +142,14 @@ if (hasUSD) {
 }
 ```
 
-### 8. 공동GP 분리 + N빵 계산
+### 8. 공동GP 분리 (금액 동일 유지)
 
-공동GP 감지 후 금액을 GP 수로 나눔:
+공동GP 감지 후 금액을 **분할하지 않고 동일하게 유지** (N빵 금지 - CLAUDE.md 정책):
+
+> **중요**: 공동GP는 하나의 펀드를 여러 운용사가 공동으로 운용하므로, 각 GP에 펀드 전체 금액을 동일하게 입력합니다.
 
 ```javascript
-function applyNBbang(entries) {
+function preserveJointGPAmounts(entries) {
   // jointGPGroup으로 그룹핑
   const groups = {};
   entries.forEach(e => {
@@ -157,31 +159,16 @@ function applyNBbang(entries) {
     }
   });
 
-  // 각 그룹의 금액을 N으로 나눔
+  // 각 그룹의 금액을 동일하게 유지
   for (const [groupId, members] of Object.entries(groups)) {
     const count = members.length;
     if (count <= 1) continue;
 
-    // 원본 금액 보존
-    const original = {
-      minFormation: members[0].minFormation,
-      moTae: members[0].moTae,
-      fundSize: members[0].fundSize,
-      requestAmount: members[0].requestAmount
-    };
-
     members.forEach(m => {
       m.jointGPCount = count;
-      m.originalMinFormation = original.minFormation;
-      m.originalMoTae = original.moTae;
-      m.originalFundSize = original.fundSize;
-      m.originalRequestAmount = original.requestAmount;
-
-      // N빵 적용
-      if (original.minFormation) m.minFormation = original.minFormation / count;
-      if (original.moTae) m.moTae = original.moTae / count;
-      if (original.fundSize) m.fundSize = original.fundSize / count;
-      if (original.requestAmount) m.requestAmount = original.requestAmount / count;
+      m.isJointGP = true;
+      // 금액은 분할하지 않음 - 원본 그대로 유지
+      // minFormation, moTae, fundSize, requestAmount 모두 동일
     });
   }
 }
@@ -256,17 +243,14 @@ const cache = {
       name: "A벤처스",
       originalName: "A벤처스 / B파트너스",
       category: "청년 - 청년창업",
-      minFormation: 100,         // N빵 후
-      moTae: 50,                 // N빵 후
-      fundSize: 200,             // N빵 후
+      minFormation: 200,         // 동일 금액 유지 (N빵 금지)
+      moTae: 100,                // 동일 금액 유지
+      fundSize: 400,             // 동일 금액 유지
       requestAmount: null,
       currency: "억원",
       isJointGP: true,
       jointGPGroup: "JG001",
       jointGPCount: 2,
-      originalMinFormation: 200, // 원본
-      originalMoTae: 100,        // 원본
-      originalFundSize: 400,     // 원본
       source: "ai"
     }
   ],
@@ -302,7 +286,7 @@ fs.writeFileSync(`result/${fileNo}_selection.json`, JSON.stringify(cache, null, 
 
 📌 공동GP 처리:
   - 공동GP: {N}개
-  - N빵 적용: {N}건
+  - 금액 동일 유지: {N}건 (N빵 금지)
 
 🔍 운용사 분석:
   - 기존 운용사: {N}개
@@ -316,6 +300,6 @@ fs.writeFileSync(`result/${fileNo}_selection.json`, JSON.stringify(cache, null, 
 
 - **저장하지 않음** (분석만 수행)
 - **금액은 숫자로만 저장** (문자열 X)
-- **N빵 적용 시 원본 금액 보존**
+- **공동GP는 금액 분할 금지** (동일 금액 유지)
 - **USD 환율은 파일 등록날짜 기준으로 조회**
 - **유사 운용사 질문하지 않음** (캐시에 기록만)

@@ -9,9 +9,35 @@ router.use(authMiddleware);
 
 // 출자사업 목록 조회
 router.get('/', asyncHandler(async (req, res) => {
-  const { year, 소관, search, page = 1, limit = 50 } = req.query;
+  const { year, 소관, 공고유형, search, page = 1, limit = 50 } = req.query;
   const sheets = await getSheetsClient();
-  let projects = await sheets.getAllRows('출자사업');
+
+  // 출자사업과 경쟁률 동시 조회
+  const [allProjects, competitionRates] = await Promise.all([
+    sheets.getAllRows('출자사업'),
+    sheets.getAllRows('경쟁률')
+  ]);
+
+  // 출자사업별 경쟁률 집계
+  const ratesByProject = new Map();
+  for (const rate of competitionRates) {
+    const projectId = rate['출자사업ID'];
+    if (!ratesByProject.has(projectId)) {
+      ratesByProject.set(projectId, { 선정합계: 0, 지원합계: 0 });
+    }
+    const stats = ratesByProject.get(projectId);
+    stats.선정합계 += parseInt(rate['선정펀드수']) || 0;
+    stats.지원합계 += parseInt(rate['지원펀드수']) || 0;
+  }
+
+  // 경쟁률 추가
+  let projects = allProjects.map(p => {
+    const rates = ratesByProject.get(p['ID']);
+    return {
+      ...p,
+      경쟁률: rates ? `${rates.선정합계}:${rates.지원합계}` : null
+    };
+  });
 
   // 필터링
   if (year) {
@@ -19,6 +45,9 @@ router.get('/', asyncHandler(async (req, res) => {
   }
   if (소관) {
     projects = projects.filter(p => p['소관'] === 소관);
+  }
+  if (공고유형) {
+    projects = projects.filter(p => p['공고유형'] === 공고유형);
   }
   if (search) {
     const searchLower = search.toLowerCase();
@@ -76,11 +105,12 @@ router.get('/:id/detail', asyncHandler(async (req, res) => {
     throw error;
   }
 
-  // 해당 사업의 신청현황 조회
-  const [allApplications, operators, files] = await Promise.all([
+  // 해당 사업의 신청현황, 운용사, 파일, 경쟁률 조회
+  const [allApplications, operators, files, allCompetitionRates] = await Promise.all([
     sheets.getAllRows('신청현황'),
     sheets.getAllOperators(),
-    sheets.getAllRows('파일')
+    sheets.getAllRows('파일'),
+    sheets.getAllRows('경쟁률')
   ]);
 
   const applications = allApplications.filter(app => app['출자사업ID'] === id);
@@ -107,10 +137,14 @@ router.get('/:id/detail', asyncHandler(async (req, res) => {
     result: resultFileIds.map(fid => fileMap.get(fid)).filter(Boolean)
   };
 
+  // 해당 출자사업의 분야별 경쟁률
+  const competitionRates = allCompetitionRates.filter(r => r['출자사업ID'] === id);
+
   res.json({
     data: project,
     applications: enrichedApplications,
-    linkedFiles
+    linkedFiles,
+    competitionRates
   });
 }));
 

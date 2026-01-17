@@ -6,19 +6,29 @@ import { fetchProjects } from '../api/client';
 
 export default function Projects() {
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
   const [year, setYear] = useState('');
+  const [institution, setInstitution] = useState('');
+  const [announcementType, setAnnouncementType] = useState('');
   const [page, setPage] = useState(1);
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['projects', search, year, page],
-    queryFn: () => fetchProjects({ search, year, page, limit: 50 }).then(res => res.data)
+    queryKey: ['projects', appliedSearch, year, institution, announcementType, page],
+    queryFn: () => fetchProjects({
+      search: appliedSearch,
+      year,
+      소관: institution,
+      공고유형: announcementType,
+      page,
+      limit: 50
+    }).then(res => res.data)
   });
 
   const handleSearch = (e) => {
     e.preventDefault();
+    setAppliedSearch(searchInput);
     setPage(1);
-    refetch();
   };
 
   if (isLoading) {
@@ -31,6 +41,12 @@ export default function Projects() {
   // 연도 옵션 생성 (2020년부터 현재까지)
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: currentYear - 2019 }, (_, i) => currentYear - i);
+
+  // 소관 기관 옵션
+  const institutions = ['중기부', '문체부', '과기정통부', '해수부', '특허청', '부산시', '경기도'];
+
+  // 공고유형 옵션
+  const announcementTypes = ['정시', '수시'];
 
   return (
     <div className="projects-page">
@@ -48,18 +64,35 @@ export default function Projects() {
           <input
             type="text"
             placeholder="사업명으로 검색..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
         <select
           value={year}
           onChange={(e) => { setYear(e.target.value); setPage(1); }}
-          style={{ padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--gray-300)' }}
         >
           <option value="">전체 연도</option>
           {years.map(y => (
             <option key={y} value={y}>{y}년</option>
+          ))}
+        </select>
+        <select
+          value={institution}
+          onChange={(e) => { setInstitution(e.target.value); setPage(1); }}
+        >
+          <option value="">전체 소관</option>
+          {institutions.map(inst => (
+            <option key={inst} value={inst}>{inst}</option>
+          ))}
+        </select>
+        <select
+          value={announcementType}
+          onChange={(e) => { setAnnouncementType(e.target.value); setPage(1); }}
+        >
+          <option value="">전체 유형</option>
+          {announcementTypes.map(type => (
+            <option key={type} value={type}>{type}</option>
           ))}
         </select>
         <button type="submit" className="btn-search">검색</button>
@@ -80,6 +113,7 @@ export default function Projects() {
               <th>차수</th>
               <th>공고유형</th>
               <th>현황</th>
+              <th>경쟁률</th>
             </tr>
           </thead>
           <tbody>
@@ -96,6 +130,11 @@ export default function Projects() {
                 <td>{project['차수'] || '-'}</td>
                 <td>{project['공고유형'] || '-'}</td>
                 <td>{project['현황'] || '-'}</td>
+                <td>
+                  {project['경쟁률'] ? (
+                    <span className="competition-rate">{project['경쟁률']}</span>
+                  ) : '-'}
+                </td>
               </tr>
             ))}
           </tbody>

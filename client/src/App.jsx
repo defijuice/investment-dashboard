@@ -8,6 +8,7 @@ import Projects from './pages/Projects';
 import ProjectDetail from './pages/ProjectDetail';
 import Search from './pages/Search';
 import Admin from './pages/Admin';
+import About from './pages/About';
 import Login from './pages/Login';
 import './App.css';
 
@@ -45,6 +46,7 @@ function App() {
             <Route path="projects" element={<Projects />} />
             <Route path="projects/:id" element={<ProjectDetail />} />
             <Route path="search" element={<Search />} />
+            <Route path="about" element={<About />} />
             <Route path="admin" element={<Admin />} />
           </Route>
         </Routes>

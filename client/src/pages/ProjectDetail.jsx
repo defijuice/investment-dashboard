@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, FileText, FileCheck, Users, TrendingUp, TrendingDown,
-  ExternalLink, Edit3, Save, X, RefreshCw
+  ExternalLink, Edit3, Save, X, RefreshCw, Target
 } from 'lucide-react';
 import {
   fetchProjectDetail,
@@ -31,6 +31,7 @@ export default function ProjectDetail() {
   const project = projectData?.data;
   const applications = projectData?.applications || [];
   const linkedFiles = projectData?.linkedFiles || { support: [], result: [] };
+  const competitionRates = projectData?.competitionRates || [];
 
   // 통계 계산
   const stats = {
@@ -44,6 +45,12 @@ export default function ProjectDetail() {
     ? ((stats.선정 / (stats.선정 + stats.탈락)) * 100).toFixed(1)
     : 0;
 
+  // 평균 경쟁률 계산
+  const avgCompetitionRate = competitionRates.length > 0
+    ? (competitionRates.reduce((sum, r) => sum + (parseInt(r['지원펀드수']) || 0), 0) /
+       competitionRates.reduce((sum, r) => sum + (parseInt(r['선정펀드수']) || 1), 0)).toFixed(1)
+    : null;
+
   const handleFileClick = (fileId, fileType) => {
     setSelectedFile({ id: fileId, type: fileType });
   };
@@ -51,6 +58,24 @@ export default function ProjectDetail() {
   const handleCloseModal = () => {
     setSelectedFile(null);
     refetch();
+  };
+
+  // 공동GP 판단 함수
+  const isJointGP = (app) => {
+    const note = app['비고'] || '';
+    return note.match(/^AP\d+$/) !== null || app['상태'] === '공동GP';
+  };
+
+  // 공동GP 파트너 ID 추출
+  const getGPPartner = (app) => {
+    const note = app['비고'] || '';
+    const match = note.match(/^AP\d+$/);
+    return match ? match[0] : null;
+  };
+
+  // 실제 표시할 상태 (공동GP → 접수로 변환)
+  const getDisplayStatus = (status) => {
+    return status === '공동GP' ? '접수' : status;
   };
 
   return (
@@ -109,6 +134,17 @@ export default function ProjectDetail() {
             <span className="stat-label">선정률</span>
           </div>
         </div>
+        {avgCompetitionRate && (
+          <div className="stat-card">
+            <div className="stat-icon competition">
+              <Target size={24} />
+            </div>
+            <div className="stat-content">
+              <span className="stat-value">1:{avgCompetitionRate}</span>
+              <span className="stat-label">평균 경쟁률</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Linked Files */}
@@ -161,6 +197,73 @@ export default function ProjectDetail() {
         </div>
       </div>
 
+      {/* Competition Rates */}
+      {competitionRates.length > 0 && (() => {
+        // 전체 경쟁률 계산
+        const totalSelected = competitionRates.reduce((sum, r) => sum + (parseInt(r['선정펀드수']) || 0), 0);
+        const totalApplied = competitionRates.reduce((sum, r) => sum + (parseInt(r['지원펀드수']) || 0), 0);
+        const totalRate = `${totalSelected}:${totalApplied}`;
+
+        return (
+          <div className="card">
+            {/* 전체 경쟁률 - 미니멀 카드 */}
+            <div className="total-rate-card">
+              <div className="total-rate-main">
+                <span className="total-rate-value">{totalRate}</span>
+                <span className="total-rate-label">전체 경쟁률</span>
+              </div>
+              <div className="total-rate-sub">
+                <span>{totalSelected}개 선정</span>
+                <span className="divider">/</span>
+                <span>{totalApplied}개 지원</span>
+              </div>
+            </div>
+
+            {/* 분야별 경쟁률 */}
+            <h2>분야별 경쟁률</h2>
+            <div className="table-container">
+              <table className="competition-table">
+                <thead>
+                  <tr>
+                    <th>출자분야</th>
+                    <th>선정</th>
+                    <th>지원</th>
+                    <th>경쟁률</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {competitionRates.map(rate => {
+                    const selected = parseInt(rate['선정펀드수']) || 0;
+                    const applied = parseInt(rate['지원펀드수']) || 0;
+                    const ratio = selected > 0 ? (applied / selected) : applied;
+                    const barWidth = Math.min(ratio * 10, 100);
+
+                    return (
+                      <tr key={rate['ID']}>
+                        <td>{rate['출자분야']}</td>
+                        <td className="text-center">{rate['선정펀드수']}</td>
+                        <td className="text-center">{rate['지원펀드수']}</td>
+                        <td>
+                          <div className="rate-cell">
+                            <span className="rate-badge">{rate['경쟁률']}</span>
+                            <div className="rate-bar-container">
+                              <div
+                                className="rate-bar"
+                                style={{ width: `${barWidth}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Applications Table */}
       <div className="card">
         <div className="card-header">
@@ -180,32 +283,56 @@ export default function ProjectDetail() {
                 <tr>
                   <th>운용사</th>
                   <th>출자분야</th>
-                  <th>결성예정액</th>
-                  <th>모태출자액</th>
+                  <th>최소결성규모(억 원)</th>
+                  <th>모태출자액(억 원)</th>
                   <th>상태</th>
+                  <th>공동GP</th>
                   <th>비고</th>
                 </tr>
               </thead>
               <tbody>
-                {applications.map(app => (
-                  <tr key={app['ID']} className={`status-row-${app['상태']}`}>
-                    <td
-                      className="link-cell"
-                      onClick={() => navigate(`/operators/${app['운용사ID']}`)}
-                    >
-                      {app['운용사명'] || app['운용사ID']}
-                    </td>
-                    <td>{app['출자분야']}</td>
-                    <td>{app['결성예정액'] ? `${app['결성예정액']}억원` : '-'}</td>
-                    <td>{app['모태출자액'] ? `${app['모태출자액']}억원` : '-'}</td>
-                    <td>
-                      <span className={`status-badge ${app['상태']}`}>
-                        {app['상태']}
-                      </span>
-                    </td>
-                    <td>{app['비고'] || '-'}</td>
-                  </tr>
-                ))}
+                {[...applications]
+                  .sort((a, b) => {
+                    const getOrder = (status) => {
+                      if (status === '공동GP') return 1;
+                      const order = { '선정': 0, '접수': 1, '탈락': 2 };
+                      return order[status] ?? 3;
+                    };
+                    return getOrder(a['상태']) - getOrder(b['상태']);
+                  })
+                  .map(app => {
+                    const displayStatus = getDisplayStatus(app['상태']);
+                    const jointGP = isJointGP(app);
+                    const gpPartner = getGPPartner(app);
+
+                    return (
+                      <tr key={app['ID']} className={`status-row-${displayStatus}`}>
+                        <td
+                          className="link-cell"
+                          onClick={() => navigate(`/operators/${app['운용사ID']}`)}
+                        >
+                          {app['운용사명'] || app['운용사ID']}
+                        </td>
+                        <td>{app['출자분야']}</td>
+                        <td>{app['최소결성규모'] || app['결성예정액'] || '-'}</td>
+                        <td>{app['모태출자액'] || '-'}</td>
+                        <td>
+                          <span className={`status-badge ${displayStatus}`}>
+                            {displayStatus}
+                          </span>
+                        </td>
+                        <td>
+                          {jointGP ? (
+                            <span className="gp-badge">
+                              공동GP
+                              {gpPartner && <small>({gpPartner})</small>}
+                            </span>
+                          ) : '-'}
+                        </td>
+                        <td>{jointGP ? '-' : (app['비고'] || '-')}</td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>

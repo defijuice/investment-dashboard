@@ -177,12 +177,15 @@ def parse_application_pdf_v2(pdf_path):
 
 
 def split_joint_gp(company_name):
-    """공동GP 분리 - 쉼표, 슬래시, 줄바꿈으로 구분"""
+    """공동GP 분리 - 쉼표, 슬래시, 하이픈(해외VC), 줄바꿈으로 구분"""
     if not company_name:
         return []
 
+    # (Co-GP) 접두사 제거
+    name = re.sub(r'^\(Co-?GP\)\s*', '', company_name, flags=re.IGNORECASE)
+
     # 먼저 줄바꿈으로 분리
-    lines = company_name.split('\n')
+    lines = name.split('\n')
 
     companies = []
     for line in lines:
@@ -198,6 +201,28 @@ def split_joint_gp(company_name):
         elif '/' in line:
             parts = line.split('/')
             companies.extend([p.strip() for p in parts if p.strip()])
+        # 하이픈으로 분리 (해외VC 공동GP: "A-B인베스트먼트" 형태)
+        # 단, 한글-영문 조합 또는 영문-한글 조합인 경우만 분리
+        # 예: "MDI-KB인베스트먼트" → ["MDI", "KB인베스트먼트"]
+        elif '-' in line:
+            # 하이픈 위치 찾기
+            parts = line.split('-')
+            # 양쪽이 각각 독립적인 회사명처럼 보이면 분리
+            # (한쪽이 영문만, 다른쪽이 한글 포함인 경우)
+            if len(parts) == 2:
+                left = parts[0].strip()
+                right = parts[1].strip()
+                # 왼쪽이 영문만이고 오른쪽이 한글 포함이면 분리
+                if re.match(r'^[A-Za-z\s]+$', left) and re.search(r'[가-힣]', right):
+                    companies.extend([left, right])
+                # 또는 둘 다 회사 접미사를 포함하면 분리
+                elif any(suffix in left for suffix in ['인베스트', '벤처', '파트너', '캐피탈']) or \
+                     any(suffix in right for suffix in ['인베스트', '벤처', '파트너', '캐피탈']):
+                    companies.extend([left, right])
+                else:
+                    companies.append(line)
+            else:
+                companies.append(line)
         else:
             companies.append(line)
 
@@ -406,17 +431,18 @@ def parse_selection_pdf(pdf_path):
             entry = {
                 'company': company,
                 'category': s['category'],
-                'min_formation': s['min_formation'] / gp_count if s['min_formation'] and is_joint_gp else s['min_formation'],
-                'mo_tae': s['mo_tae'] / gp_count if s['mo_tae'] and is_joint_gp else s['mo_tae'],
-                'fund_size': s['fund_size'] / gp_count if s['fund_size'] and is_joint_gp else s['fund_size'],
-                'request_amount': s['request_amount'] / gp_count if s['request_amount'] and is_joint_gp else s['request_amount'],
+                # 공동GP도 동일한 금액 (분할하지 않음 - 하나의 펀드이므로)
+                'min_formation': s['min_formation'],
+                'mo_tae': s['mo_tae'],
+                'fund_size': s['fund_size'],
+                'request_amount': s['request_amount'],
                 'currency': s['currency'],
                 'is_joint_gp': is_joint_gp,
                 'original_company': s['company'] if is_joint_gp else None,
                 'joint_gp_count': gp_count if is_joint_gp else None,
                 # 하위 호환성
-                'amount_planned': s['fund_size'] / gp_count if s['fund_size'] and is_joint_gp else s['fund_size'],
-                'amount_requested': s['request_amount'] / gp_count if s['request_amount'] and is_joint_gp else s['request_amount'],
+                'amount_planned': s['fund_size'],
+                'amount_requested': s['request_amount'],
             }
 
             # 원본 금액 보존 (N빵 전)

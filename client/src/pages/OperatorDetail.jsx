@@ -35,12 +35,14 @@ export default function OperatorDetail() {
     queryFn: () => fetchOperatorTimeline(id, 10).then(res => res.data)
   });
 
-  const { data: winRate, isLoading: winRateLoading } = useQuery({
+  const { data: winRate, isLoading: winRateLoading, isFetching: winRateFetching } = useQuery({
     queryKey: ['operatorWinRate', id, winRateYears],
-    queryFn: () => fetchOperatorWinRate(id, winRateYears).then(res => res.data)
+    queryFn: () => fetchOperatorWinRate(id, winRateYears).then(res => res.data),
+    keepPreviousData: true
   });
 
-  if (profileLoading || timelineLoading || winRateLoading) {
+  // 프로필과 타임라인만 초기 로딩 체크 (승률 분석은 독립적으로 로딩)
+  if (profileLoading || timelineLoading) {
     return <div className="loading">로딩 중...</div>;
   }
 
@@ -81,8 +83,9 @@ export default function OperatorDetail() {
         <h1>{operator?.['운용사명']}</h1>
         {operator?.['약어'] && <span className="alias">({operator['약어']})</span>}
         <div className="operator-meta">
-          <span>{operator?.['유형'] || '벤처캐피탈'}</span>
-          <span>{operator?.['국가'] || '대한민국'}</span>
+          <span>{operator?.['유형'] || '국내VC'}</span>
+          <span>{operator?.['국가'] || '한국'}</span>
+          <span className="meta-period">최근 5년 기준</span>
         </div>
       </div>
 
@@ -129,7 +132,7 @@ export default function OperatorDetail() {
       {/* Win Rate Analysis */}
       <div className="card">
         <div className="card-header">
-          <h2>승률 분석 (Win-Rate)</h2>
+          <h2>승률 분석</h2>
           <div className="period-selector">
             {[1, 3, 5].map(y => (
               <button
@@ -143,7 +146,7 @@ export default function OperatorDetail() {
           </div>
         </div>
 
-        <div className="win-rate-summary">
+        <div className={`win-rate-summary ${winRateFetching ? 'loading' : ''}`}>
           <div className="win-rate-main">
             <div className="win-rate-circle">
               <span className="rate">{winRate?.overall?.winRate || 0}%</span>
@@ -254,21 +257,31 @@ export default function OperatorDetail() {
                 </span>
               </div>
               <div className="year-apps">
-                {year.applications.map((app, idx) => (
-                  <div key={idx} className={`app-item ${app['상태']}`}>
-                    <span
-                      className="app-project link-cell"
-                      onClick={() => navigate(`/projects/${app.projectId}`)}
-                    >
-                      {app.projectName}
-                    </span>
-                    <span className="app-category">{app['출자분야']}</span>
-                    <span className={`app-status ${app['상태']}`}>{app['상태']}</span>
-                    {app['비고']?.includes('공동GP') && (
-                      <span className="app-badge">공동GP</span>
-                    )}
-                  </div>
-                ))}
+                {year.applications.map((app, idx) => {
+                  const fundAmount = app['결성예정액'] || app['최소결성규모'];
+                  const isSelected = app['상태'] === '선정';
+
+                  return (
+                    <div key={idx} className={`app-item ${app['상태']}`}>
+                      <span
+                        className="app-project link-cell"
+                        onClick={() => navigate(`/projects/${app.projectId}`)}
+                      >
+                        {app.projectName}
+                      </span>
+                      <span className="app-category">{app['출자분야']}</span>
+                      {isSelected && fundAmount && (
+                        <span className="app-amount">
+                          {parseFloat(fundAmount).toLocaleString()}억원
+                        </span>
+                      )}
+                      <span className={`app-status ${app['상태']}`}>{app['상태']}</span>
+                      {app['비고']?.includes('공동GP') && (
+                        <span className="app-badge">공동GP</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}

@@ -42,11 +42,14 @@ export const clearApiKey = () => {
 };
 
 // Stats
-export const fetchDashboardStats = () => client.get('/stats/dashboard');
+export const fetchDashboardStats = (years = 5) =>
+  client.get('/stats/dashboard', { params: { years } });
 export const fetchTopOperators = (years = 3, limit = 10) =>
   client.get('/stats/top-operators', { params: { years, limit } });
 export const fetchTopOperatorsByAmount = (years = 3, limit = 10) =>
   client.get('/stats/top-operators-by-amount', { params: { years, limit } });
+export const fetchCategoryBreakdown = (years = 3) =>
+  client.get('/stats/category-breakdown', { params: { years } });
 
 // Operators
 export const fetchOperators = (params) => client.get('/operators', { params });
