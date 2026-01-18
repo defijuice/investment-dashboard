@@ -19,6 +19,23 @@ router.post('/login', (req, res) => {
   res.json({ success: true, token: result.token });
 });
 
+// Admin 전용 로그인 (별도 비밀번호)
+router.post('/admin-login', (req, res) => {
+  const { password } = req.body;
+
+  if (!password) {
+    return res.status(400).json({ error: '비밀번호를 입력하세요.' });
+  }
+
+  const result = login(password);
+
+  if (!result.success) {
+    return res.status(401).json({ error: result.error });
+  }
+
+  res.json({ success: true, token: result.token });
+});
+
 router.get('/verify', (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {

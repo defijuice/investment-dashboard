@@ -45,6 +45,26 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     }
   }
 
+  // Rolling 12개월 선정 통계 계산
+  const now = new Date();
+  let rolling12Amount = 0;
+  let rolling12Count = 0;
+
+  for (const app of applications) {
+    if (app['상태'] !== '선정') continue;
+    const projectYear = projectYearMap.get(app['출자사업ID']);
+    if (!projectYear) continue;
+
+    // 최근 12개월: 작년 같은 월부터 현재까지
+    // 정확한 날짜가 없으므로 연도 기준으로 근사치 계산
+    // 현재 연도와 작년 데이터만 포함
+    if (projectYear >= now.getFullYear() - 1) {
+      const amount = parseFloat(app['결성예정액']) || parseFloat(app['최소결성규모']) || 0;
+      rolling12Amount += amount;
+      rolling12Count++;
+    }
+  }
+
   // 현재 연도와 전년도 데이터
   const currentYearStats = yearlyStats[currentYear] || { totalAmount: 0, selectedCount: 0 };
   const prevYearStats = yearlyStats[currentYear - 1] || { totalAmount: 0, selectedCount: 0 };
@@ -71,9 +91,41 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     제외: files.filter(f => f['처리상태'] === '제외').length
   };
 
-  // 최근 출자사업 (연도 역순, 최근 10개)
+  // 파일ID에서 숫자 추출 (FH0123 → 123)
+  const getFileIdNum = (fileId) => parseInt(fileId?.replace(/\D/g, '') || '0');
+
+  // 최근 출자사업 (결과 미발표 우선, 그 다음 결과파일 등록순)
   const recentProjects = projects
+    .map(p => {
+      const resultFileIds = (p['결과파일ID'] || '').split(',').map(s => s.trim()).filter(Boolean);
+      const hasResult = resultFileIds.length > 0;
+
+      // 선정결과 파일 중 가장 최신 파일ID (숫자가 큰 것 = 최신)
+      let latestResultFileIdNum = 0;
+      if (hasResult) {
+        for (const fileId of resultFileIds) {
+          const num = getFileIdNum(fileId);
+          if (num > latestResultFileIdNum) {
+            latestResultFileIdNum = num;
+          }
+        }
+      }
+
+      return { ...p, hasResult, latestResultFileIdNum };
+    })
     .sort((a, b) => {
+      // 1순위: 결과 없는 사업 우선 (결과 발표 전)
+      if (!a.hasResult && b.hasResult) return -1;
+      if (a.hasResult && !b.hasResult) return 1;
+
+      // 2순위: 선정결과 파일ID 최신순 (숫자 큰 순)
+      if (a.hasResult && b.hasResult) {
+        if (a.latestResultFileIdNum !== b.latestResultFileIdNum) {
+          return b.latestResultFileIdNum - a.latestResultFileIdNum;
+        }
+      }
+
+      // 3순위 (fallback): 연도/차수 역순
       const yearDiff = (parseInt(b['연도']) || 0) - (parseInt(a['연도']) || 0);
       if (yearDiff !== 0) return yearDiff;
       return (b['차수'] || '').localeCompare(a['차수'] || '');
@@ -103,7 +155,10 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
       cumulativeAmount,
       cumulativeSelected,
       activeGPCount: activeGPs.size,
-      periodYears: parseInt(years)
+      periodYears: parseInt(years),
+      // Rolling 12개월 데이터
+      rolling12Amount,
+      rolling12Count
     },
     yearlyStats,
     // 기존 데이터 (하위 호환)

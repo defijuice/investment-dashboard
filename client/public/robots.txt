@@ -1,0 +1,63 @@
+# VC RANK - 크롤링 정책
+# 일반 검색엔진은 허용, AI 학습용 크롤러는 차단
+
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+
+# OpenAI GPTBot 차단
+User-agent: GPTBot
+Disallow: /
+
+# Common Crawl 차단
+User-agent: CCBot
+Disallow: /
+
+# Google AI 차단
+User-agent: Google-Extended
+Disallow: /
+
+# Anthropic Claude 차단
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+# Facebook AI 차단
+User-agent: FacebookBot
+Disallow: /
+
+# Bytedance AI 차단
+User-agent: Bytespider
+Disallow: /
+
+# Amazon AI 차단
+User-agent: Amazonbot
+Disallow: /
+
+# Perplexity AI 차단
+User-agent: PerplexityBot
+Disallow: /
+
+# Cohere AI 차단
+User-agent: cohere-ai
+Disallow: /
+
+# 기타 알려진 AI 봇
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: OAI-SearchBot
+Disallow: /
+
+User-agent: YouBot
+Disallow: /
+
+# Apple AI 차단
+User-agent: Applebot-Extended
+Disallow: /
+
+# Sitemap (검색엔진용)
+Sitemap: https://vcrank.io/sitemap.xml

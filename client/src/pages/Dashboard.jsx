@@ -1,18 +1,23 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { TrendingUp, TrendingDown, RefreshCw, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { RefreshCw, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { fetchDashboardStats, fetchTopOperators, fetchTopOperatorsByAmount, fetchCategoryBreakdown } from '../api/client';
 import ShareButton from '../components/ShareButton';
+import DetailDrawer from '../components/DetailDrawer';
+import OperatorDetailContent from './OperatorDetailContent';
+import ProjectDetailContent from './ProjectDetailContent';
 
 const COLORS = ['#2563eb', '#059669', '#7c3aed', '#dc2626', '#f59e0b', '#06b6d4', '#84cc16', '#ec4899'];
 const ITEMS_PER_PAGE = 10;
 const MAX_PAGES = 20;
 
 export default function Dashboard() {
-  const navigate = useNavigate();
   const [heroYears, setHeroYears] = useState(5);
+
+  // Drawer 상태
+  const [selectedOperatorId, setSelectedOperatorId] = useState(null);
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [amountYears, setAmountYears] = useState(3);
   const [categoryYears, setCategoryYears] = useState(3);
   const [countYears, setCountYears] = useState(3);
@@ -48,7 +53,6 @@ export default function Dashboard() {
   // 전역 로딩 제거 - 각 섹션이 독립적으로 로딩 상태 관리
 
   const hero = stats?.hero || {};
-  const yoyIsPositive = parseFloat(hero.yoyPercent) >= 0;
 
   // 금액 포맷팅 (억원 → 조원 변환)
   const formatAmount = (amount) => {
@@ -89,14 +93,8 @@ export default function Dashboard() {
 
         <div className="hero-main">
           <div className="hero-primary">
-            <span className="hero-amount">{formatAmount(hero.currentYearAmount || 0)}</span>
-            <span className="hero-label">'{String(hero.currentYear).slice(2)}년 선정 펀드 결성액</span>
-            {hero.yoyPercent !== null && (
-              <span className={`hero-yoy ${yoyIsPositive ? 'positive' : 'negative'}`}>
-                {yoyIsPositive ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                {yoyIsPositive ? '+' : ''}{hero.yoyPercent}% YoY
-              </span>
-            )}
+            <span className="hero-amount">{formatAmount(hero.rolling12Amount || 0)}</span>
+            <span className="hero-label">최근 12개월 선정 결성액 ({hero.rolling12Count || 0}건)</span>
           </div>
         </div>
 
@@ -238,7 +236,7 @@ export default function Dashboard() {
                 .map((op, idx) => (
                 <tr
                   key={op.id}
-                  onClick={() => navigate(`/operators/${op.id}`)}
+                  onClick={() => setSelectedOperatorId(op.id)}
                   style={{ cursor: 'pointer' }}
                 >
                   <td>{(amountPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
@@ -319,7 +317,7 @@ export default function Dashboard() {
                 .map((op, idx) => (
                 <tr
                   key={op.id}
-                  onClick={() => navigate(`/operators/${op.id}`)}
+                  onClick={() => setSelectedOperatorId(op.id)}
                   style={{ cursor: 'pointer' }}
                 >
                   <td>{(countPage - 1) * ITEMS_PER_PAGE + idx + 1}</td>
@@ -385,7 +383,7 @@ export default function Dashboard() {
               {stats.recentProjects.map(project => (
                 <tr
                   key={project['ID']}
-                  onClick={() => navigate(`/projects/${project['ID']}`)}
+                  onClick={() => setSelectedProjectId(project['ID'])}
                   style={{ cursor: 'pointer' }}
                 >
                   <td className="link-cell">{project['사업명']}</td>
@@ -405,6 +403,30 @@ export default function Dashboard() {
           </table>
         </div>
       )}
+
+      {/* Operator Detail Drawer */}
+      <DetailDrawer
+        isOpen={!!selectedOperatorId}
+        onClose={() => setSelectedOperatorId(null)}
+        title="운용사 상세"
+        width="700px"
+      >
+        {selectedOperatorId && (
+          <OperatorDetailContent id={selectedOperatorId} />
+        )}
+      </DetailDrawer>
+
+      {/* Project Detail Drawer */}
+      <DetailDrawer
+        isOpen={!!selectedProjectId}
+        onClose={() => setSelectedProjectId(null)}
+        title="출자사업 상세"
+        width="800px"
+      >
+        {selectedProjectId && (
+          <ProjectDetailContent id={selectedProjectId} />
+        )}
+      </DetailDrawer>
     </div>
   );
 }
