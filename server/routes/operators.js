@@ -14,6 +14,9 @@ router.get('/', asyncHandler(async (req, res) => {
   const sheets = await getSheetsClient();
   let operators = await sheets.getAllOperators();
 
+  // 빈 행 필터링
+  operators = operators.filter(op => op['ID'] && op['운용사명']);
+
   // 검색 필터링
   if (search) {
     const searchLower = search.toLowerCase();

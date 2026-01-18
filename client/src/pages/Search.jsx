@@ -1,21 +1,46 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Search as SearchIcon, Download, X, Loader2 } from 'lucide-react';
 import { searchApplicationsAdvanced, fetchSearchOptions } from '../api/client';
+import DetailDrawer from '../components/DetailDrawer';
+import OperatorDetailContent from './OperatorDetailContent';
+import ProjectDetailContent from './ProjectDetailContent';
 
 export default function Search() {
-  const navigate = useNavigate();
-  const [filters, setFilters] = useState({
-    gpType: 'all',
-    years: 'all',
-    category: '',
-    institution: '',
-    status: '',
-    search: ''
-  });
-  const [page, setPage] = useState(1);
-  const [searchInput, setSearchInput] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Drawer 상태
+  const [selectedOperatorId, setSelectedOperatorId] = useState(null);
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
+
+  // URL에서 초기값 읽기
+  const initialFilters = {
+    gpType: searchParams.get('gpType') || 'all',
+    years: searchParams.get('years') || 'all',
+    category: searchParams.get('category') || '',
+    institution: searchParams.get('institution') || '',
+    status: searchParams.get('status') || '',
+    search: searchParams.get('search') || ''
+  };
+  const initialPage = parseInt(searchParams.get('page') || '1', 10);
+
+  const [filters, setFilters] = useState(initialFilters);
+  const [page, setPage] = useState(initialPage);
+  const [searchInput, setSearchInput] = useState(initialFilters.search);
+
+  // 상태 변경 시 URL 업데이트
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (filters.gpType !== 'all') params.set('gpType', filters.gpType);
+    if (filters.years !== 'all') params.set('years', filters.years);
+    if (filters.category) params.set('category', filters.category);
+    if (filters.institution) params.set('institution', filters.institution);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.search) params.set('search', filters.search);
+    if (page > 1) params.set('page', String(page));
+    setSearchParams(params, { replace: true });
+  }, [filters, page, setSearchParams]);
 
   const { data: options } = useQuery({
     queryKey: ['searchOptions'],
@@ -226,7 +251,7 @@ export default function Search() {
             <div key={group.projectId} className="project-group card">
               <div
                 className="project-group-header"
-                onClick={() => navigate(`/projects/${group.projectId}`)}
+                onClick={() => setSelectedProjectId(group.projectId)}
               >
                 <div className="project-info">
                   <span className="project-year">{group.연도}</span>
@@ -242,7 +267,7 @@ export default function Search() {
                   <tr>
                     <th>운용사명</th>
                     <th>출자분야</th>
-                    <th>최소결성규모</th>
+                    <th>최소결성규모(억 원)</th>
                     <th>상태</th>
                     <th>GP형태</th>
                   </tr>
@@ -252,12 +277,12 @@ export default function Search() {
                     <tr key={app['ID'] || idx}>
                       <td
                         className="link-cell"
-                        onClick={() => navigate(`/operators/${app['운용사ID']}`)}
+                        onClick={() => setSelectedOperatorId(app['운용사ID'])}
                       >
                         {app['운용사명']}
                       </td>
                       <td>{app['출자분야']}</td>
-                      <td>{(app['최소결성규모'] || app['결성예정액']) ? `${app['최소결성규모'] || app['결성예정액']}억원` : '-'}</td>
+                      <td>{(app['최소결성규모'] || app['결성예정액']) || '-'}</td>
                       <td>
                         <span className={`status-badge ${app['상태']}`}>
                           {app['상태']}
@@ -301,6 +326,30 @@ export default function Search() {
           </button>
         </div>
       )}
+
+      {/* Operator Detail Drawer */}
+      <DetailDrawer
+        isOpen={!!selectedOperatorId}
+        onClose={() => setSelectedOperatorId(null)}
+        title="운용사 상세"
+        width="700px"
+      >
+        {selectedOperatorId && (
+          <OperatorDetailContent id={selectedOperatorId} />
+        )}
+      </DetailDrawer>
+
+      {/* Project Detail Drawer */}
+      <DetailDrawer
+        isOpen={!!selectedProjectId}
+        onClose={() => setSelectedProjectId(null)}
+        title="출자사업 상세"
+        width="800px"
+      >
+        {selectedProjectId && (
+          <ProjectDetailContent id={selectedProjectId} />
+        )}
+      </DetailDrawer>
     </div>
   );
 }

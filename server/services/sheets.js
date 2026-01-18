@@ -164,9 +164,43 @@ function createSheetsWrapper(sheets) {
       }
     },
 
+    // 시트 이름으로 sheetId 조회
+    async getSheetId(sheetName) {
+      const response = await sheets.spreadsheets.get({
+        spreadsheetId: SPREADSHEET_ID,
+        fields: 'sheets.properties'
+      });
+
+      const sheet = response.data.sheets.find(
+        s => s.properties.title === sheetName
+      );
+
+      if (!sheet) {
+        throw new Error(`Sheet not found: ${sheetName}`);
+      }
+
+      return sheet.properties.sheetId;
+    },
+
+    // 실제 행 삭제 (데이터 클리어가 아닌 행 자체 삭제)
     async deleteRow(sheetName, rowIndex) {
-      // 간단한 구현: 해당 행을 빈 값으로 클리어
-      await this.setValues(`${sheetName}!A${rowIndex}:Z${rowIndex}`, [[]]);
+      const sheetId = await this.getSheetId(sheetName);
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: sheetId,
+                dimension: 'ROWS',
+                startIndex: rowIndex - 1,  // 0-based (1-indexed → 0-indexed)
+                endIndex: rowIndex
+              }
+            }
+          }]
+        }
+      });
     },
 
     async updateApplication(id, data) {

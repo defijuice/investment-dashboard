@@ -14,6 +14,9 @@ router.get('/', asyncHandler(async (req, res) => {
 
   let applications = await sheets.getAllRows('신청현황');
 
+  // 빈 행 필터링
+  applications = applications.filter(app => app['ID'] && app['출자사업ID']);
+
   // 필터링
   if (projectId) {
     applications = applications.filter(app => app['출자사업ID'] === projectId);
@@ -143,6 +146,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
     운용사ID,
     출자분야,
     결성예정액,
+    모태출자액,
     출자요청액,
     최소결성규모,
     통화단위,
@@ -173,6 +177,9 @@ router.put('/:id', asyncHandler(async (req, res) => {
   }
   if (최소결성규모 !== undefined) {
     await sheets.setValues(`신청현황!E${rowIndex}`, [[최소결성규모]]);
+  }
+  if (모태출자액 !== undefined) {
+    await sheets.setValues(`신청현황!F${rowIndex}`, [[모태출자액]]);
   }
   if (결성예정액 !== undefined) {
     await sheets.setValues(`신청현황!G${rowIndex}`, [[결성예정액]]);

@@ -2054,7 +2054,7 @@ tbody tr:hover {
 /* History Timeline - Dense Layout */
 .history-timeline {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
 
@@ -2089,6 +2089,15 @@ tbody tr:hover {
 
 .history-badge.upcoming {
   background: var(--about-accent-gold);
+}
+
+.history-item.coming-soon-item {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.history-badge.coming-soon-badge {
+  background: var(--gray-400);
 }
 
 .history-content h4 {
@@ -2553,4 +2562,57 @@ tbody tr:hover {
     padding: 14px 16px;
     font-size: 1rem;
   }
+}
+
+/* ==================== Search Stats Summary ==================== */
+
+.search-stats-summary {
+  display: flex;
+  gap: 2rem;
+  padding: 1rem 1.5rem;
+  background: var(--neu-bg);
+  border-radius: 12px;
+  box-shadow: var(--neu-shadow);
+  margin-bottom: 1.5rem;
+}
+
+.search-stats-summary .stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.search-stats-summary .stat-label {
+  font-size: 0.9rem;
+  color: var(--gray-600);
+  font-weight: 500;
+}
+
+.search-stats-summary .stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.search-stats-summary .stat-count {
+  font-size: 0.8rem;
+  color: var(--gray-400);
+}
+
+@media (max-width: 640px) {
+  .search-stats-summary {
+    flex-direction: column;
+    gap: 1rem;
+  }
+}
+
+/* ==================== Selected Row ==================== */
+
+tr.selected-row {
+  background: rgba(37, 99, 235, 0.08) !important;
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+tr.selected-row:hover {
+  background: rgba(37, 99, 235, 0.12) !important;
 }
