@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Search as SearchIcon, Filter, Download, X } from 'lucide-react';
+import { Search as SearchIcon, Download, X, Loader2 } from 'lucide-react';
 import { searchApplicationsAdvanced, fetchSearchOptions } from '../api/client';
 
 export default function Search() {
@@ -22,9 +22,10 @@ export default function Search() {
     queryFn: () => fetchSearchOptions().then(res => res.data)
   });
 
-  const { data: results, isLoading, refetch } = useQuery({
+  const { data: results, isLoading, isFetching } = useQuery({
     queryKey: ['searchResults', filters, page],
-    queryFn: () => searchApplicationsAdvanced({ ...filters, page, limit: 50 }).then(res => res.data)
+    queryFn: () => searchApplicationsAdvanced({ ...filters, page, limit: 50 }).then(res => res.data),
+    keepPreviousData: true  // 새 데이터 로딩 중에도 이전 데이터 표시
   });
 
   const handleFilterChange = (key, value) => {
@@ -105,7 +106,10 @@ export default function Search() {
             onKeyPress={handleKeyPress}
           />
         </div>
-        <button className="btn-search" onClick={handleSearch}>검색</button>
+        <button className="btn-search" onClick={handleSearch} disabled={isFetching}>
+          {isFetching ? <Loader2 size={16} className="spin" /> : null}
+          검색
+        </button>
       </div>
 
       {/* Filters */}
@@ -192,7 +196,7 @@ export default function Search() {
       {results?.stats && (
         <div className="results-stats">
           <div className="stats-summary">
-            <span className="total">검색 결과: {results.stats.total}건</span>
+            <span className="total">총 {results.stats.total}건 ({results.totalGroups || 0}개 사업)</span>
             <span className="selected">선정: {results.stats.selected}</span>
             <span className="rejected">탈락: {results.stats.rejected}</span>
             <span className="pending">접수: {results.stats.pending}</span>
@@ -207,54 +211,71 @@ export default function Search() {
         </div>
       )}
 
-      {/* Results Table */}
-      {isLoading ? (
+      {/* Results - Grouped by Project */}
+      {isLoading && !results ? (
         <div className="loading">검색 중...</div>
       ) : (
-        <div className="results-table-container">
-          <table className="results-table">
-            <thead>
-              <tr>
-                <th>운용사명</th>
-                <th>사업명</th>
-                <th>출자분야</th>
-                <th>결성예정액</th>
-                <th>상태</th>
-                <th>GP형태</th>
-                <th>소관</th>
-                <th>연도</th>
-              </tr>
-            </thead>
-            <tbody>
-              {results?.data?.map((app, idx) => (
-                <tr key={app['ID'] || idx}>
-                  <td
-                    className="link-cell"
-                    onClick={() => navigate(`/operators/${app['운용사ID']}`)}
-                  >
-                    {app['운용사명']}
-                  </td>
-                  <td>{app['사업명']}</td>
-                  <td>{app['출자분야']}</td>
-                  <td>{app['결성예정액'] ? `${app['결성예정액']}억원` : '-'}</td>
-                  <td>
-                    <span className={`status-badge ${app['상태']}`}>
-                      {app['상태']}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`gp-badge ${app.isCoGP ? 'cogp' : 'sole'}`}>
-                      {app.isCoGP ? '공동GP' : '단독'}
-                    </span>
-                  </td>
-                  <td>{app['소관']}</td>
-                  <td>{app['연도']}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className={`results-grouped-container ${isFetching ? 'fetching' : ''}`}>
+          {isFetching && (
+            <div className="fetching-overlay">
+              <Loader2 size={24} className="spin" />
+              <span>검색 중...</span>
+            </div>
+          )}
+          {results?.grouped?.map((group) => (
+            <div key={group.projectId} className="project-group card">
+              <div
+                className="project-group-header"
+                onClick={() => navigate(`/projects/${group.projectId}`)}
+              >
+                <div className="project-info">
+                  <span className="project-year">{group.연도}</span>
+                  <h3 className="project-name">{group.projectName}</h3>
+                  <span className="project-institution">{group.소관}</span>
+                </div>
+                <div className="project-stats">
+                  <span className="app-count">{group.applications.length}건</span>
+                </div>
+              </div>
+              <table className="results-table">
+                <thead>
+                  <tr>
+                    <th>운용사명</th>
+                    <th>출자분야</th>
+                    <th>최소결성규모</th>
+                    <th>상태</th>
+                    <th>GP형태</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.applications.map((app, idx) => (
+                    <tr key={app['ID'] || idx}>
+                      <td
+                        className="link-cell"
+                        onClick={() => navigate(`/operators/${app['운용사ID']}`)}
+                      >
+                        {app['운용사명']}
+                      </td>
+                      <td>{app['출자분야']}</td>
+                      <td>{(app['최소결성규모'] || app['결성예정액']) ? `${app['최소결성규모'] || app['결성예정액']}억원` : '-'}</td>
+                      <td>
+                        <span className={`status-badge ${app['상태']}`}>
+                          {app['상태']}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`gp-badge ${app.isCoGP ? 'cogp' : 'sole'}`}>
+                          {app.isCoGP ? '공동GP' : '단독'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
 
-          {results?.data?.length === 0 && (
+          {(!results?.grouped || results.grouped.length === 0) && (
             <div className="no-results">
               검색 결과가 없습니다.
             </div>

@@ -314,15 +314,19 @@ router.get('/search/advanced', asyncHandler(async (req, res) => {
     };
   });
 
-  // 텍스트 검색
+  // 텍스트 검색 (운용사 약어도 포함)
   let results = enriched;
   if (search) {
     const searchLower = search.toLowerCase();
-    results = enriched.filter(app =>
-      app['운용사명']?.toLowerCase().includes(searchLower) ||
-      app['사업명']?.toLowerCase().includes(searchLower) ||
-      app['출자분야']?.toLowerCase().includes(searchLower)
-    );
+    results = enriched.filter(app => {
+      const operator = operatorMap.get(app['운용사ID']);
+      return (
+        app['운용사명']?.toLowerCase().includes(searchLower) ||
+        app['사업명']?.toLowerCase().includes(searchLower) ||
+        app['출자분야']?.toLowerCase().includes(searchLower) ||
+        operator?.['약어']?.toLowerCase().includes(searchLower)
+      );
+    });
   }
 
   // 통계 집계
@@ -335,19 +339,75 @@ router.get('/search/advanced', asyncHandler(async (req, res) => {
     sole: results.filter(r => !r.isCoGP).length
   };
 
-  // 페이지네이션
-  const total = results.length;
+  // 최신순 정렬 (연도 내림차순 → ID 내림차순)
+  results.sort((a, b) => {
+    // 1차: 연도 내림차순
+    const yearA = parseInt(a['연도']) || 0;
+    const yearB = parseInt(b['연도']) || 0;
+    if (yearB !== yearA) return yearB - yearA;
+
+    // 2차: 출자사업ID 내림차순 (PJ0100 > PJ0001)
+    const pjA = parseInt(a['출자사업ID']?.replace('PJ', '')) || 0;
+    const pjB = parseInt(b['출자사업ID']?.replace('PJ', '')) || 0;
+    if (pjB !== pjA) return pjB - pjA;
+
+    // 3차: 신청현황ID 내림차순
+    const apA = parseInt(a['ID']?.replace('AP', '')) || 0;
+    const apB = parseInt(b['ID']?.replace('AP', '')) || 0;
+    return apB - apA;
+  });
+
+  // 출자사업별 그룹핑
+  const groupedByProject = new Map();
+  for (const app of results) {
+    const projectId = app['출자사업ID'];
+    if (!groupedByProject.has(projectId)) {
+      const project = projectMap.get(projectId);
+      groupedByProject.set(projectId, {
+        projectId,
+        projectName: project?.['사업명'] || '',
+        소관: project?.['소관'] || '',
+        연도: project?.['연도'] || '',
+        applications: []
+      });
+    }
+    groupedByProject.get(projectId).applications.push(app);
+  }
+
+  // 각 그룹 내 applications 정렬: 선정 우선 → 금액 큰 순
+  for (const group of groupedByProject.values()) {
+    group.applications.sort((a, b) => {
+      // 1차: 상태 (선정 > 접수 > 탈락)
+      const statusOrder = { '선정': 0, '접수': 1, '탈락': 2 };
+      const statusA = statusOrder[a['상태']] ?? 3;
+      const statusB = statusOrder[b['상태']] ?? 3;
+      if (statusA !== statusB) return statusA - statusB;
+
+      // 2차: 금액 큰 순 (최소결성규모 또는 결성예정액)
+      const amountA = parseFloat(a['최소결성규모']) || parseFloat(a['결성예정액']) || 0;
+      const amountB = parseFloat(b['최소결성규모']) || parseFloat(b['결성예정액']) || 0;
+      return amountB - amountA;
+    });
+  }
+
+  // 그룹 배열로 변환 (이미 정렬된 순서 유지)
+  const grouped = [...groupedByProject.values()];
+
+  // 페이지네이션 (그룹 단위)
+  const totalGroups = grouped.length;
   const startIndex = (parseInt(page) - 1) * parseInt(limit);
   const endIndex = startIndex + parseInt(limit);
-  const paginated = results.slice(startIndex, endIndex);
+  const paginatedGroups = grouped.slice(startIndex, endIndex);
 
   res.json({
-    data: paginated,
+    data: results.slice(0, 500), // flat 데이터도 제공 (하위 호환)
+    grouped: paginatedGroups,
     stats,
-    total,
+    total: results.length,
+    totalGroups,
     page: parseInt(page),
     limit: parseInt(limit),
-    totalPages: Math.ceil(total / parseInt(limit)),
+    totalPages: Math.ceil(totalGroups / parseInt(limit)),
     filters: { gpType, years, category, institution, status, search }
   });
 }));

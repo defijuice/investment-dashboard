@@ -12,10 +12,11 @@ router.get('/', asyncHandler(async (req, res) => {
   const { year, 소관, 공고유형, search, page = 1, limit = 50 } = req.query;
   const sheets = await getSheetsClient();
 
-  // 출자사업과 경쟁률 동시 조회
-  const [allProjects, competitionRates] = await Promise.all([
+  // 출자사업, 경쟁률, 신청현황 동시 조회
+  const [allProjects, competitionRates, allApplications] = await Promise.all([
     sheets.getAllRows('출자사업'),
-    sheets.getAllRows('경쟁률')
+    sheets.getAllRows('경쟁률'),
+    sheets.getAllRows('신청현황')
   ]);
 
   // 출자사업별 경쟁률 집계
@@ -30,12 +31,26 @@ router.get('/', asyncHandler(async (req, res) => {
     stats.지원합계 += parseInt(rate['지원펀드수']) || 0;
   }
 
-  // 경쟁률 추가
+  // 출자사업별 출자분야 집계 (신청현황에서)
+  const categoriesByProject = new Map();
+  for (const app of allApplications) {
+    const projectId = app['출자사업ID'];
+    if (!categoriesByProject.has(projectId)) {
+      categoriesByProject.set(projectId, new Set());
+    }
+    if (app['출자분야']) {
+      categoriesByProject.get(projectId).add(app['출자분야']);
+    }
+  }
+
+  // 경쟁률 및 출자분야 추가
   let projects = allProjects.map(p => {
     const rates = ratesByProject.get(p['ID']);
+    const categories = categoriesByProject.get(p['ID']);
     return {
       ...p,
-      경쟁률: rates ? `${rates.선정합계}:${rates.지원합계}` : null
+      경쟁률: rates ? `${rates.선정합계}:${rates.지원합계}` : null,
+      출자분야목록: categories ? [...categories].sort() : []
     };
   });
 
@@ -52,7 +67,8 @@ router.get('/', asyncHandler(async (req, res) => {
   if (search) {
     const searchLower = search.toLowerCase();
     projects = projects.filter(p =>
-      p['사업명']?.toLowerCase().includes(searchLower)
+      p['사업명']?.toLowerCase().includes(searchLower) ||
+      p['출자분야목록']?.some(cat => cat.toLowerCase().includes(searchLower))
     );
   }
 

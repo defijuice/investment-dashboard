@@ -8,7 +8,7 @@ const router = Router();
 // 모든 라우트에 인증 적용
 router.use(authMiddleware);
 
-// 운용사 목록 조회
+// 운용사 목록 조회 (최근 5년 통계 포함)
 router.get('/', asyncHandler(async (req, res) => {
   const { search, page = 1, limit = 50 } = req.query;
   const sheets = await getSheetsClient();
@@ -29,8 +29,57 @@ router.get('/', asyncHandler(async (req, res) => {
   const endIndex = startIndex + parseInt(limit);
   const paginated = operators.slice(startIndex, endIndex);
 
+  // 최근 5년 통계 계산
+  const [applications, projects] = await Promise.all([
+    sheets.getAllRows('신청현황'),
+    sheets.getAllRows('출자사업')
+  ]);
+
+  const projectMap = new Map(projects.map(p => [p['ID'], p]));
+  const currentYear = new Date().getFullYear();
+  const startYear = currentYear - 5;
+
+  // 운용사별 통계 계산
+  const operatorStats = new Map();
+  for (const app of applications) {
+    const project = projectMap.get(app['출자사업ID']);
+    const year = parseInt(project?.['연도']) || 0;
+    if (year < startYear) continue;
+
+    const opId = app['운용사ID'];
+    if (!operatorStats.has(opId)) {
+      operatorStats.set(opId, { totalAUM: 0, selected: 0, confirmed: 0 });
+    }
+
+    const stats = operatorStats.get(opId);
+
+    // 결과 확정된 것만 승률 계산에 포함
+    if (app['상태'] === '선정' || app['상태'] === '탈락') {
+      stats.confirmed++;
+      if (app['상태'] === '선정') {
+        stats.selected++;
+        // AUM 계산 (선정된 것만)
+        const amount = parseFloat(app['결성예정액']) || parseFloat(app['최소결성규모']) || 0;
+        stats.totalAUM += amount;
+      }
+    }
+  }
+
+  // 통계 추가
+  const paginatedWithStats = paginated.map(op => {
+    const stats = operatorStats.get(op['ID']) || { totalAUM: 0, selected: 0, confirmed: 0 };
+    const winRate = stats.confirmed > 0 ? (stats.selected / stats.confirmed * 100) : 0;
+    return {
+      ...op,
+      recentAUM: stats.totalAUM,
+      winRate: Math.round(winRate * 10) / 10,
+      selected: stats.selected,
+      confirmed: stats.confirmed
+    };
+  });
+
   res.json({
-    data: paginated,
+    data: paginatedWithStats,
     total,
     page: parseInt(page),
     limit: parseInt(limit),

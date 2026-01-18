@@ -20,7 +20,7 @@ async function initSheets() {
     });
   } else {
     // 로컬 환경: 파일 기반 인증
-    const { GoogleSheetsClient } = await import('../../src/googleSheets.js');
+    const { GoogleSheetsClient } = await import('../../src/core/googleSheets.js');
     sheetsClient = new GoogleSheetsClient();
     await sheetsClient.init();
     return sheetsClient;

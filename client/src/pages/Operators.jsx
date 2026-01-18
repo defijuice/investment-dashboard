@@ -28,6 +28,21 @@ export default function Operators() {
   const operators = data?.data || [];
   const totalPages = data?.totalPages || 1;
 
+  // 금액 포맷팅 (억원 단위, 단위 표시 없음)
+  const formatAUM = (value) => {
+    if (!value || value === 0) return '-';
+    if (value >= 10000) {
+      return `${(value / 10000).toFixed(1)}조`;
+    }
+    return Math.round(value).toLocaleString();
+  };
+
+  // 승률 포맷팅 (% 표시 없음)
+  const formatWinRate = (rate, selected, confirmed) => {
+    if (!confirmed || confirmed === 0) return '-';
+    return `${rate} (${selected}/${confirmed})`;
+  };
+
   return (
     <div className="operators-page">
       <div className="page-header">
@@ -59,11 +74,9 @@ export default function Operators() {
         <table>
           <thead>
             <tr>
-              <th>ID</th>
               <th>운용사명</th>
-              <th>약어</th>
-              <th>유형</th>
-              <th>국가</th>
+              <th style={{ textAlign: 'right' }}>결성예정액(최근 5년, 억 원)</th>
+              <th style={{ textAlign: 'right' }}>승률(최근 5년, %)</th>
             </tr>
           </thead>
           <tbody>
@@ -73,11 +86,9 @@ export default function Operators() {
                 onClick={() => navigate(`/operators/${op['ID']}`)}
                 style={{ cursor: 'pointer' }}
               >
-                <td>{op['ID']}</td>
                 <td className="link-cell">{op['운용사명']}</td>
-                <td>{op['약어'] || '-'}</td>
-                <td>{op['유형'] || '-'}</td>
-                <td>{op['국가'] || '-'}</td>
+                <td style={{ textAlign: 'right' }}>{formatAUM(op.recentAUM)}</td>
+                <td style={{ textAlign: 'right' }}>{formatWinRate(op.winRate, op.selected, op.confirmed)}</td>
               </tr>
             ))}
           </tbody>

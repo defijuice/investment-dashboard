@@ -899,13 +899,17 @@ async function processPair(applicationFileNo, selectionFileNo) {
       }
 
       // 선정 상태일 때만 금액 저장 (접수/탈락은 개별 금액이 없으므로 비워둠)
+      // 최소결성규모가 없으면 결성예정액으로 대체
+      const fundSize = isSelected ? (selectionData?.fundSize || '') : '';
+      const minFormation = isSelected ? (selectionData?.minFormation || fundSize) : '';
+
       applicationDataList.push({
         출자사업ID: project.id,
         운용사ID: operatorId,
         출자분야: applicant.category,
-        최소결성규모: isSelected ? (selectionData?.minFormation || '') : '',
+        최소결성규모: minFormation,
         모태출자액: isSelected ? (selectionData?.moTae || '') : '',
-        결성예정액: isSelected ? (selectionData?.fundSize || '') : '',
+        결성예정액: fundSize,
         출자요청액: isSelected ? (selectionData?.requestAmount || '') : '',
         통화단위: isSelected ? (selectionData?.currency || '') : '',
         상태: applicant.status,
@@ -955,13 +959,17 @@ async function processPair(applicationFileNo, selectionFileNo) {
         continue;
       }
 
+      // 최소결성규모가 없으면 결성예정액으로 대체
+      const sFundSize = s.fundSize || '';
+      const sMinFormation = s.minFormation || sFundSize;
+
       applicationDataList.push({
         출자사업ID: project.id,
         운용사ID: operatorId,
         출자분야: s.category,
-        최소결성규모: s.minFormation || '',
+        최소결성규모: sMinFormation,
         모태출자액: s.moTae || '',
-        결성예정액: s.fundSize || '',
+        결성예정액: sFundSize,
         출자요청액: s.requestAmount || '',
         통화단위: s.currency || '',
         상태: '선정',

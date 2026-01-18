@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { TrendingUp, TrendingDown, RefreshCw, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { fetchDashboardStats, fetchTopOperators, fetchTopOperatorsByAmount, fetchCategoryBreakdown } from '../api/client';
+import ShareButton from '../components/ShareButton';
 
 const COLORS = ['#2563eb', '#059669', '#7c3aed', '#dc2626', '#f59e0b', '#06b6d4', '#84cc16', '#ec4899'];
 const ITEMS_PER_PAGE = 10;
@@ -61,9 +62,12 @@ export default function Dashboard() {
     <div className="dashboard">
       <div className="page-header">
         <h1>대시보드</h1>
-        <button className="btn-icon" onClick={handleRefresh}>
-          <RefreshCw size={18} />
-        </button>
+        <div className="header-actions">
+          <ShareButton stats={stats} />
+          <button className="btn-icon" onClick={handleRefresh}>
+            <RefreshCw size={18} />
+          </button>
+        </div>
       </div>
 
       {/* Hero Section - LP 중심 */}

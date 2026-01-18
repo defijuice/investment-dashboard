@@ -106,10 +106,9 @@ export default function Projects() {
         <table>
           <thead>
             <tr>
-              <th>ID</th>
+              <th>연도</th>
               <th>사업명</th>
               <th>소관</th>
-              <th>연도</th>
               <th>차수</th>
               <th>공고유형</th>
               <th>현황</th>
@@ -123,10 +122,18 @@ export default function Projects() {
                 onClick={() => navigate(`/projects/${project['ID']}`)}
                 style={{ cursor: 'pointer' }}
               >
-                <td>{project['ID']}</td>
-                <td className="link-cell">{project['사업명']}</td>
-                <td>{project['소관'] || '-'}</td>
                 <td>{project['연도'] || '-'}</td>
+                <td className="link-cell">
+                  <div>{project['사업명']}</div>
+                  {project['출자분야목록']?.length > 0 && (
+                    <div className="category-tags">
+                      {project['출자분야목록'].map((cat, idx) => (
+                        <span key={idx} className="category-tag">{cat}</span>
+                      ))}
+                    </div>
+                  )}
+                </td>
+                <td>{project['소관'] || '-'}</td>
                 <td>{project['차수'] || '-'}</td>
                 <td>{project['공고유형'] || '-'}</td>
                 <td>{project['현황'] || '-'}</td>

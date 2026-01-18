@@ -1043,6 +1043,90 @@ tbody tr:hover {
   overflow: hidden;
 }
 
+/* Grouped Results */
+.results-grouped-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.project-group {
+  padding: 0;
+  overflow: hidden;
+}
+
+.project-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, var(--gray-50), var(--gray-100));
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.project-group-header:hover {
+  background: linear-gradient(135deg, var(--gray-100), var(--gray-200));
+}
+
+.project-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.project-year {
+  background: var(--primary);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.project-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gray-800);
+  margin: 0;
+}
+
+.project-institution {
+  background: var(--gray-200);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: var(--gray-600);
+}
+
+.project-stats .app-count {
+  background: var(--primary-light);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.project-group .results-table {
+  margin: 0;
+}
+
+.project-group .results-table thead {
+  background: var(--gray-50);
+}
+
+.project-group .results-table th {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--gray-500);
+}
+
+.project-group .results-table td {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+}
+
 .results-table {
   font-size: 0.875rem;
 }
@@ -1681,13 +1765,53 @@ tbody tr:hover {
   color: var(--gray-500);
 }
 
-.spinning {
+.spinning, .spin {
   animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* Fetching overlay */
+.results-grouped-container {
+  position: relative;
+}
+
+.results-grouped-container.fetching {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.fetching-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 10;
+  background: rgba(224, 229, 236, 0.9);
+  padding: 1.5rem 2rem;
+  border-radius: 12px;
+  box-shadow: var(--neu-shadow-sm);
+}
+
+.fetching-overlay span {
+  color: var(--gray-600);
+  font-size: 0.9rem;
+}
+
+.btn-search:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.btn-search .spin {
+  margin-right: 0.25rem;
 }
 
 /* Shimmer Gold Text Animation */
@@ -1870,7 +1994,7 @@ tbody tr:hover {
   margin-bottom: 12px;
 }
 
-.about-section p {
+.about-section p:not(.slogan-sub) {
   font-size: 0.9rem;
   color: var(--about-text-secondary);
   line-height: 1.7;
@@ -1915,9 +2039,10 @@ tbody tr:hover {
 }
 
 .slogan-sub {
-  font-size: 0.95rem;
-  color: rgba(255, 255, 255, 0.8);
-  font-weight: 400;
+  font-size: 1rem;
+  color: #ffffff;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 /* Brand Story - Compact */
@@ -2243,6 +2368,13 @@ tbody tr:hover {
 
 /* ==================== Category Tag ==================== */
 
+.category-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
 .category-tag {
   display: inline-block;
   padding: 2px 8px;
@@ -2272,5 +2404,153 @@ tbody tr:hover {
   .category-legend {
     flex-direction: column;
     gap: 0.5rem;
+  }
+}
+
+/* ==================== Share Button ==================== */
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.share-button {
+  position: relative;
+}
+
+.share-trigger {
+  transition: all 0.2s ease;
+}
+
+.share-trigger.active {
+  box-shadow: var(--neu-shadow-inset);
+  color: var(--primary);
+}
+
+.share-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--neu-bg);
+  border-radius: 16px;
+  box-shadow: var(--neu-shadow), 0 10px 40px rgba(0, 0, 0, 0.1);
+  min-width: 200px;
+  z-index: 100;
+  overflow: hidden;
+  animation: shareMenuFadeIn 0.2s ease;
+}
+
+@keyframes shareMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.share-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--gray-200);
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--gray-700);
+}
+
+.share-close {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--gray-400);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.share-close:hover {
+  background: var(--gray-200);
+  color: var(--gray-600);
+}
+
+.share-items {
+  padding: 8px;
+}
+
+.share-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--neu-bg);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--gray-700);
+  transition: all 0.2s ease;
+  box-shadow: var(--neu-shadow-sm);
+  margin-bottom: 6px;
+}
+
+.share-item:last-child {
+  margin-bottom: 0;
+}
+
+.share-item:hover {
+  box-shadow: var(--neu-shadow);
+  transform: translateY(-1px);
+}
+
+.share-item:active {
+  box-shadow: var(--neu-shadow-inset);
+  transform: translateY(0);
+}
+
+/* Platform-specific colors */
+.share-item.linkedin:hover {
+  color: white;
+  background: #0A66C2;
+}
+
+.share-item.twitter:hover {
+  color: white;
+  background: #000000;
+}
+
+.share-item.copy:hover {
+  color: white;
+  background: var(--primary);
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  .share-menu {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-radius: 24px 24px 0 0;
+    min-width: 100%;
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+
+  .share-items {
+    padding: 12px 16px;
+  }
+
+  .share-item {
+    padding: 14px 16px;
+    font-size: 1rem;
   }
 }
