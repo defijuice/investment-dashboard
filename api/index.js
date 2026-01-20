@@ -25,6 +25,16 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Debug endpoint - 환경변수 확인용
+app.get('/api/debug', (req, res) => {
+  res.json({
+    hasSpreadsheetId: !!config.spreadsheetId,
+    hasServiceAccountKey: !!config.serviceAccountKey,
+    serviceAccountKeyLength: config.serviceAccountKey?.length || 0,
+    nodeEnv: process.env.NODE_ENV
+  });
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/operators', operatorsRoutes);

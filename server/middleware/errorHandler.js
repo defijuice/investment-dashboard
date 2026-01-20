@@ -1,5 +1,6 @@
 export function errorHandler(err, req, res, next) {
   console.error('[Error]', err.message);
+  console.error('[Error Stack]', err.stack);
 
   // Google API 할당량 초과
   if (err.code === 429 || err.message?.includes('Quota exceeded')) {
