@@ -14,6 +14,10 @@ async function initSheets() {
   // Vercel 환경: 환경변수에서 서비스 계정 키 사용
   if (config.serviceAccountKey) {
     const key = JSON.parse(config.serviceAccountKey);
+    // Vercel 환경변수에서 \n이 문자열로 저장되는 경우 실제 줄바꿈으로 변환
+    if (key.private_key) {
+      key.private_key = key.private_key.replace(/\\n/g, '\n');
+    }
     auth = new google.auth.GoogleAuth({
       credentials: key,
       scopes: ['https://www.googleapis.com/auth/spreadsheets']
